@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getOverlayDimensions } from "@/lib/ar-utils";
 import type { CanvasSize } from "@/types";
@@ -29,11 +29,28 @@ export default function CanvasOverlay({
     containerRef,
     scaleFactor = 1,
 }: CanvasOverlayProps) {
-    const { widthPx, heightPx } = getOverlayDimensions(
+    const { widthPx: baseWidth, heightPx: baseHeight } = getOverlayDimensions(
         size.widthCm,
         size.heightCm,
         scaleFactor
     );
+
+    const [maxWidth, setMaxWidth] = useState<number>(1000);
+
+    useEffect(() => {
+        setMaxWidth(window.innerWidth * 0.85); // Na start 85% szerokości ekranu
+        const handleResize = () => setMaxWidth(window.innerWidth * 0.85);
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
+    let adjustedScale = 1;
+    if (baseWidth > maxWidth) {
+        adjustedScale = maxWidth / baseWidth;
+    }
+
+    const finalWidth = Math.round(baseWidth * adjustedScale);
+    const finalHeight = Math.round(baseHeight * adjustedScale);
 
     const dragRef = useRef<HTMLDivElement>(null);
 
@@ -47,12 +64,12 @@ export default function CanvasOverlay({
                     className="relative pointer-events-auto"
                     style={{
                         cursor: "grab",
-                        // Outer drop-shadow applied via filter
-                        filter:
-                            "drop-shadow(0 16px 32px rgba(0,0,0,0.55)) drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+                        // Kontekst nakładania mieszania musi być na samym szczycie drzewa dom (na elemencie z drag),
+                        // inaczej iOS safari zaizoluje tło!
+                        mixBlendMode: "multiply"
                     }}
                     initial={{ opacity: 0, scale: 0.88 }}
-                    animate={{ opacity: 1, scale: 1, width: widthPx, height: heightPx }}
+                    animate={{ opacity: 1, scale: 1, width: finalWidth, height: finalHeight }}
                     exit={{ opacity: 0, scale: 0.88 }}
                     transition={{ type: "spring", stiffness: 260, damping: 22 }}
                     // ─── Drag ─────────────────────────────────────────────
@@ -81,9 +98,6 @@ export default function CanvasOverlay({
                             fill
                             className="object-cover"
                             style={{
-                                // CRITICAL: Multiply makes white transparent against the camera background.
-                                // Contrast 1.05 ensures backgrounds that are 98% white become 100% white.
-                                mixBlendMode: "multiply",
                                 filter: "contrast(1.05)",
                             }}
                             draggable={false}
