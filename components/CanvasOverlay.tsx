@@ -35,22 +35,34 @@ export default function CanvasOverlay({
         scaleFactor
     );
 
-    const [maxWidth, setMaxWidth] = useState<number>(1000);
+    const [globalScale, setGlobalScale] = useState<number>(1);
 
     useEffect(() => {
-        setMaxWidth(window.innerWidth * 0.85); // Na start 85% szerokości ekranu
-        const handleResize = () => setMaxWidth(window.innerWidth * 0.85);
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
+        const updateScale = () => {
+            // Największy rozmiar w sklepie to 120cm szerokości (lub 120cm wysokości, liczymy max)
+            // Przy CM_TO_PX_RATIO = 5.8, 120cm to około 696px.
+            const MAX_CANVAS_PX = 120 * 5.8; 
+            
+            // Chcemy, aby te 120cm zajmowało maksymalnie 75% (3/4) szerokości telefonu
+            const maxAllowedWidth = window.innerWidth * 0.75;
+            
+            if (MAX_CANVAS_PX > maxAllowedWidth) {
+                // Obliczamy jeden stały współczynnik pomniejszenia dla całej aplikacji
+                setGlobalScale(maxAllowedWidth / MAX_CANVAS_PX);
+            } else {
+                setGlobalScale(1);
+            }
+        };
+
+        updateScale();
+        window.addEventListener("resize", updateScale);
+        return () => window.removeEventListener("resize", updateScale);
     }, []);
 
-    let adjustedScale = 1;
-    if (baseWidth > maxWidth) {
-        adjustedScale = maxWidth / baseWidth;
-    }
-
-    const finalWidth = Math.round(baseWidth * adjustedScale);
-    const finalHeight = Math.round(baseHeight * adjustedScale);
+    // Stosujemy ten sam współczynnik globalScale do KAŻDEGO z rozmiarów.
+    // Dzięki temu 30x20 wciąż będzie malutkie, a 120x80 zajmie max 3/4 ekranu.
+    const finalWidth = Math.round(baseWidth * globalScale);
+    const finalHeight = Math.round(baseHeight * globalScale);
 
     const dragRef = useRef<HTMLDivElement>(null);
 
@@ -58,16 +70,9 @@ export default function CanvasOverlay({
         <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none pb-[20vh]">
             <AnimatePresence mode="wait">
                 <motion.div
-                    // Removed key={size.id} so the element doesn't unmount on size change,
-                    // preserving its drag x/y position on the wall!
                     ref={dragRef}
-                    className="relative pointer-events-auto"
-                    style={{
-                        cursor: "grab",
-                        // Kontekst nakładania mieszania musi być na samym szczycie drzewa dom (na elemencie z drag),
-                        // inaczej iOS safari zaizoluje tło!
-                        mixBlendMode: "multiply"
-                    }}
+                    className="relative pointer-events-auto shadow-2xl"
+                    style={{ cursor: "grab" }}
                     initial={{ opacity: 0, scale: 0.88 }}
                     animate={{ opacity: 1, scale: 1, width: finalWidth, height: finalHeight }}
                     exit={{ opacity: 0, scale: 0.88 }}
