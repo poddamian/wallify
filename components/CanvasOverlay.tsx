@@ -64,11 +64,9 @@ export default function CanvasOverlay({
                 >
                     {/* Canvas frame with realistic depth shadow */}
                     <div
-                        className="w-full h-full relative overflow-hidden bg-white/5"
+                        className="w-full h-full relative overflow-hidden"
                         style={{
                             borderRadius: "2px",
-                            // Tryb mieszania kolorów pozwala "wyciąć" białe tło ze zdjęć Shopify!
-                            mixBlendMode: "multiply",
                             boxShadow: [
                                 "0 0 0 1.5px rgba(255,255,255,0.18)",   // biała krawędź
                                 "3px 3px 0 0 rgba(0,0,0,0.55)",          // głębia blejtramu
@@ -82,6 +80,12 @@ export default function CanvasOverlay({
                             alt="Canvas preview"
                             fill
                             className="object-cover"
+                            style={{
+                                // CRITICAL: Multiply makes white transparent against the camera background.
+                                // Contrast 1.05 ensures backgrounds that are 98% white become 100% white.
+                                mixBlendMode: "multiply",
+                                filter: "contrast(1.05)",
+                            }}
                             draggable={false}
                             priority
                         />
