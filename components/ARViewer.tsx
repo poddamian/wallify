@@ -30,7 +30,7 @@ interface ARViewerProps {
 export default function ARViewer({ product, onAddToCart, isAddingToCart = false }: ARViewerProps) {
     const [arState, setArState] = useState<ARState>("idle");
     const [selectedSize, setSelectedSize] = useState<CanvasSize>(SIZES[2]); // 70×50 jako domyślny
-    const { videoRef, status, error, startCamera, stopCamera } = useCamera();
+    const { attachVideo, status, error, startCamera, stopCamera } = useCamera();
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -164,7 +164,7 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
         <div ref={containerRef} className="relative w-full h-dvh overflow-hidden bg-black">
             {/* Obraz z kamery */}
             <video
-                ref={videoRef}
+                ref={attachVideo}
                 autoPlay
                 playsInline
                 muted

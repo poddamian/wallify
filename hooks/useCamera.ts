@@ -4,20 +4,24 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { CameraStatus } from "@/types";
 
 export function useCamera() {
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const [status, setStatus] = useState<CameraStatus>("idle");
     const [error, setError] = useState<string | null>(null);
 
-    // Attach stream to video element whenever both are ready.
-    // This runs AFTER React re-renders the <video> element into the DOM
-    // (which only happens once status === "active" and ARViewer shows the camera view).
-    useEffect(() => {
-        if (status === "active" && streamRef.current && videoRef.current) {
-            videoRef.current.srcObject = streamRef.current;
-            videoRef.current.play().catch(() => {
-                // Autoplay may be blocked by browser policy; user gesture already happened
-                // so this should rarely fire, but we swallow the error gracefully.
+    // Callback ref: Odpala się natychmiast, gdy React stworzy element <video>.
+    // To eliminuje problem iOS Safari, który blokuje stream w asynchronicznym useEffect.
+    const attachVideo = useCallback((node: HTMLVideoElement | null) => {
+        videoRef.current = node;
+        if (node && status === "active" && streamRef.current) {
+            node.srcObject = streamRef.current;
+            // Wmuszamy na sztywno flagi, które iOS często ignoruje, jeśli ustawi się je z JSX
+            node.setAttribute("playsinline", "true");
+            node.muted = true;
+            node.autoplay = true;
+            
+            node.play().catch((err) => {
+                console.warn("[Camera] Autoplay zablokowany przez przeglądarkę:", err);
             });
         }
     }, [status]);
@@ -81,7 +85,7 @@ export function useCamera() {
     }, []);
 
     return {
-        videoRef,
+        attachVideo,
         status,
         error,
         startCamera,
