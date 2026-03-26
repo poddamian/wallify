@@ -33,8 +33,11 @@ export default function ARPageClient({ product }: ARPageClientProps) {
                 // Dodaj produkt do koszyka i pobierz URL do kasy
                 const checkoutUrl = await addToCart(cartId, variantId, 1);
 
-                // Przekieruj do kasy Shopify
-                window.location.href = checkoutUrl;
+                // Przekieruj do kasy Shopify - używamy window.top, aby wyjść z ramki iframe
+                if (typeof window !== "undefined") {
+                    const target = window.top || window;
+                    target.location.href = checkoutUrl;
+                }
             } catch (err) {
                 console.error("[Wallify] Błąd dodawania do koszyka:", err);
 

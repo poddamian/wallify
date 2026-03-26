@@ -64,14 +64,16 @@ export default function CanvasOverlay({
                 >
                     {/* Canvas frame with realistic depth shadow */}
                     <div
-                        className="w-full h-full relative overflow-hidden"
+                        className="w-full h-full relative overflow-hidden bg-white/5"
                         style={{
                             borderRadius: "2px",
+                            // Tryb mieszania kolorów pozwala "wyciąć" białe tło ze zdjęć Shopify!
+                            mixBlendMode: "multiply",
                             boxShadow: [
-                                "0 0 0 1.5px rgba(255,255,255,0.18)",   // white rim
-                                "3px 3px 0 0 rgba(0,0,0,0.55)",          // canvas depth (right + bottom edge)
-                                "0 8px 20px rgba(0,0,0,0.5)",            // close shadow
-                                "0 24px 48px rgba(0,0,0,0.3)",           // ambient falloff
+                                "0 0 0 1.5px rgba(255,255,255,0.18)",   // biała krawędź
+                                "3px 3px 0 0 rgba(0,0,0,0.55)",          // głębia blejtramu
+                                "0 8px 20px rgba(0,0,0,0.5)",            // cień bliski
+                                "0 24px 48px rgba(0,0,0,0.3)",           // cień otoczenia
                             ].join(", "),
                         }}
                     >
