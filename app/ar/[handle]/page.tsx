@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getProduct } from "@/lib/shopify";
+import { isAdminConfigured } from "@/lib/shopify-admin";
 import ARPageClient from "./ARPageClient";
 
 interface ARPageProps {
@@ -23,6 +24,8 @@ export default async function ARPage({ params, searchParams }: ARPageProps) {
             initialMode={tryb === "zdjecie" ? "photo" : "live"}
             // Ulepszenie AI pojawia się tylko, gdy w Vercel ustawiono GEMINI_API_KEY
             aiEnabled={Boolean(process.env.GEMINI_API_KEY)}
+            // Zdjęcia klientów trafiają do Shopify Files, gdy skonfigurowano dostęp do Admin API
+            uploadsEnabled={isAdminConfigured()}
         />
     );
 }

@@ -10,6 +10,10 @@ interface AddToCartButtonProps {
     onAddToCart?: () => void;
     /** true podczas wywołania Shopify API — blokuje przycisk i pokazuje spinner */
     isLoading?: boolean;
+    /** Tekst w trakcie dodawania, np. „Wysyłanie zdjęcia… 40%" */
+    statusText?: string | null;
+    /** Powód, dla którego nie można jeszcze kupić, np. „Najpierw wybierz zdjęcie" */
+    blockedReason?: string;
 }
 
 /**
@@ -20,13 +24,17 @@ export default function AddToCartButton({
     selection,
     onAddToCart,
     isLoading = false,
+    statusText,
+    blockedReason,
 }: AddToCartButtonProps) {
     const { variant, size, selectedOptions } = selection;
-    const unavailable = !variant || !variant.availableForSale;
+    const unavailable = !variant || !variant.availableForSale || Boolean(blockedReason);
     const disabled = isLoading || unavailable;
 
     const details = [size.label, ...Object.values(selectedOptions)].join(" · ");
-    const mainLabel = !variant
+    const mainLabel = blockedReason
+        ? blockedReason
+        : !variant
         ? "Niedostępne w tym wariancie"
         : !variant.availableForSale
             ? "Chwilowo niedostępne"
@@ -51,7 +59,7 @@ export default function AddToCartButton({
             {isLoading ? (
                 <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="font-bold text-base">Dodawanie…</span>
+                    <span className="font-bold text-base">{statusText ?? "Dodawanie…"}</span>
                 </>
             ) : (
                 <>

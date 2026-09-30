@@ -31,6 +31,8 @@ interface PlacedArtworkProps {
     photo: { url: string; width: number; height: number };
     /** Pokazuje 4 uchwyty narożników do dopasowania perspektywy */
     perspective: boolean;
+    /** Położenie kadru grafiki (0–1) — dla zdjęcia klienta */
+    focus?: { x: number; y: number };
 }
 
 /**
@@ -47,6 +49,7 @@ export default function PlacedArtwork({
     view,
     photo,
     perspective,
+    focus,
 }: PlacedArtworkProps) {
     const startH = useRef<Mat3>(h);
     const quad = quadFor(h, size.widthCm, size.heightCm);
@@ -107,6 +110,7 @@ export default function PlacedArtwork({
                     alt=""
                     draggable={false}
                     className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    style={focus ? { objectPosition: `${focus.x * 100}% ${focus.y * 100}%` } : undefined}
                 />
                 {light && (
                     <div

@@ -70,6 +70,13 @@ Dla klientów, którzy nie stoją przed ścianą, i dla komputerów bez tylnej k
 - **Ulepsz AI** (opcjonalnie) — `app/api/enhance`, Gemini, tylko po zgodzie klienta
 - Otwieranie od razu: `/ar/<handle>?tryb=zdjecie`
 
+### 📷 Obraz z własnego zdjęcia (`components/personalization/`, `PERSONALIZACJA.md`)
+- Dla produktów z tagiem `personalizowany obraz` / `wallify-wlasne-zdjecie`
+- Zdjęcie klienta zamiast grafiki produktu — na żywo i na zdjęciu ściany
+- Rozmiary polecane do proporcji zdjęcia, lista wszystkich rozmiarów, ocena jakości druku (DPI)
+- Kadr (przesuwana ramka), oryginał do Shopify Files przy dodaniu do koszyka
+- W zamówieniu: link do pliku, kadr w pikselach oryginału, jakość druku
+
 ### 🛒 Warianty i koszyk (`lib/product.ts`)
 - Rozmiary, materiał, ceny i dostępność z wariantów Shopify
 - Do koszyka trafia dokładnie wybrany wariant + ukryty atrybut `_Wallify` (tryb podglądu)
@@ -134,7 +141,9 @@ npm run dev
 | ✅ Zrobione | Dodawanie wybranego wariantu do koszyka |
 | ✅ Zrobione | Przeciąganie nakładki |
 | ✅ Zrobione | Tryb ze zdjęcia ściany + zapis podglądu |
+| ✅ Zrobione | Obraz z własnego zdjęcia klienta + zapis w Shopify Files |
 | 🟡 Średni | Obrazy wieloczęściowe (panele z odstępami) w trybie ze zdjęcia |
+| 🟢 Niski | Tekst na obrazie (imię, data, dedykacja) przy personalizacji |
 | 🟡 Średni | Suwak odległości — dokładna skala w zależności od dystansu do ściany |
 | 🟢 Niski | Wykrywanie orientacji telefonu (`deviceorientation` API) |
 | 🟢 Niski | Obsługa wielu produktów — przeglądanie w widoku AR |

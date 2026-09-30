@@ -5,6 +5,7 @@
  */
 
 import { applyH, pointInQuad, rectCorners, type Mat3, type Quad } from "./homography";
+import { coverCrop } from "./product";
 
 /** Dłuższy bok zdjęcia po zmniejszeniu — wystarcza do podglądu i eksportu, oszczędza pamięć telefonu. */
 const MAX_PHOTO_SIDE = 2048;
@@ -83,6 +84,84 @@ export async function loadPhoto(file: File): Promise<LoadedPhoto> {
     }
 }
 
+/** Najmniejszy sensowny bok zdjęcia do druku */
+const MIN_ARTWORK_SIDE = 500;
+/** Największy plik, jaki przyjmujemy (zdjęcia z aparatów bywają duże) */
+export const MAX_ARTWORK_BYTES = 40 * 1024 * 1024;
+
+export class ArtworkError extends Error {}
+
+/**
+ * Wczytuje zdjęcie klienta do druku: oryginał zostaje nietknięty (trafi do Shopify przy zamówieniu),
+ * a do podglądu powstaje zmniejszona kopia.
+ */
+export async function loadCustomerArtwork(file: File): Promise<{
+    previewUrl: string;
+    width: number;
+    height: number;
+}> {
+    if (!file.type.startsWith("image/")) throw new ArtworkError("To nie jest plik ze zdjęciem.");
+    if (file.size > MAX_ARTWORK_BYTES) throw new ArtworkError("Plik jest za duży (maks. 40 MB).");
+
+    const srcUrl = URL.createObjectURL(file);
+    try {
+        let img: HTMLImageElement;
+        try {
+            img = await loadImageElement(srcUrl);
+        } catch {
+            throw new ArtworkError("Nie udało się otworzyć zdjęcia. Użyj pliku JPG lub PNG.");
+        }
+        const width = img.naturalWidth;
+        const height = img.naturalHeight;
+        if (Math.min(width, height) < MIN_ARTWORK_SIDE) {
+            throw new ArtworkError(`Zdjęcie jest za małe do druku (${width} × ${height} px).`);
+        }
+
+        const ratio = Math.min(1, MAX_PHOTO_SIDE / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new ArtworkError("Przeglądarka nie obsługuje podglądu.");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const blob = await canvasToBlob(canvas, "image/jpeg", 0.9);
+        return { previewUrl: URL.createObjectURL(blob), width, height };
+    } finally {
+        URL.revokeObjectURL(srcUrl);
+    }
+}
+
+/**
+ * Przygotowuje plik do wysyłki przez serwer (limit ok. 4 MB na żądanie):
+ * ponowny zapis jako JPG w pełnej rozdzielczości, a w razie potrzeby delikatne zmniejszenie.
+ * Używane tylko awaryjnie, gdy przeglądarka nie może wysłać oryginału prosto do Shopify.
+ */
+export async function shrinkForUpload(file: File, maxBytes = 3_900_000): Promise<Blob> {
+    if (file.size <= maxBytes && ["image/jpeg", "image/png", "image/webp"].includes(file.type)) return file;
+
+    const srcUrl = URL.createObjectURL(file);
+    try {
+        const img = await loadImageElement(srcUrl);
+        let side = Math.max(img.naturalWidth, img.naturalHeight);
+        for (const quality of [0.92, 0.88, 0.85]) {
+            for (let attempt = 0; attempt < 4; attempt++) {
+                const ratio = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.round(img.naturalWidth * ratio);
+                canvas.height = Math.round(img.naturalHeight * ratio);
+                canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+                if (blob.size <= maxBytes) return blob;
+                side = Math.round(side * 0.85);
+            }
+            side = Math.max(img.naturalWidth, img.naturalHeight);
+        }
+        throw new ArtworkError("Nie udało się przygotować zdjęcia do wysyłki.");
+    } finally {
+        URL.revokeObjectURL(srcUrl);
+    }
+}
+
 /** Czy z canvasu można czytać piksele (obraz z innej domeny bez CORS „brudzi" canvas). */
 function isReadable(img: HTMLImageElement): boolean {
     try {
@@ -109,7 +188,8 @@ export function shopifySized(url: string, width: number): string {
  * obrazów Next.js (ta sama domena, więc canvas nie jest blokowany).
  */
 export async function loadArtwork(url: string): Promise<HTMLImageElement> {
-    const isSameOrigin = url.startsWith("/") || url.startsWith(window.location.origin);
+    const isSameOrigin =
+        url.startsWith("/") || url.startsWith("blob:") || url.startsWith(window.location.origin);
     if (isSameOrigin) return loadImageElement(url);
 
     try {
@@ -179,18 +259,6 @@ export function lightToCss(f: LightFactors): string {
     return `rgb(${r}, ${g}, ${b})`;
 }
 
-/** Wycinek grafiki odpowiadający proporcjom rozmiaru (jak object-fit: cover). */
-export function coverCrop(imgW: number, imgH: number, widthCm: number, heightCm: number) {
-    const target = widthCm / heightCm;
-    const source = imgW / imgH;
-    if (source > target) {
-        const sw = imgH * target;
-        return { sx: (imgW - sw) / 2, sy: 0, sw, sh: imgH };
-    }
-    const sh = imgW / target;
-    return { sx: 0, sy: (imgH - sh) / 2, sw: imgW, sh };
-}
-
 type Tri = [number, number, number, number, number, number];
 
 /** Rysuje trójkąt obrazu `src` (w pikselach grafiki) w trójkąt `dst` (w pikselach zdjęcia). */
@@ -249,6 +317,8 @@ export type ComposeOptions = {
     widthCm: number;
     heightCm: number;
     light: LightFactors;
+    /** Położenie kadru grafiki (0–1), domyślnie środek */
+    focus?: { x: number; y: number };
     /** Podpis w rogu, np. "Kwiaty Magnolii · 100 × 70 cm" */
     caption?: string;
 };
@@ -258,7 +328,7 @@ export type ComposeOptions = {
  * i zwraca gotowy canvas — do zapisu, udostępnienia albo wysłania do ulepszenia AI.
  */
 export async function composeImage(opts: ComposeOptions): Promise<HTMLCanvasElement> {
-    const { photo, artwork, h, widthCm, heightCm, light, caption } = opts;
+    const { photo, artwork, h, widthCm, heightCm, light, focus, caption } = opts;
     const photoImg = await loadImageElement(photo.url);
 
     const canvas = document.createElement("canvas");
@@ -269,7 +339,7 @@ export async function composeImage(opts: ComposeOptions): Promise<HTMLCanvasElem
     ctx.drawImage(photoImg, 0, 0, photo.width, photo.height);
 
     // Grafika przycięta do proporcji rozmiaru i przyciemniona do światła w pokoju
-    const crop = coverCrop(artwork.naturalWidth, artwork.naturalHeight, widthCm, heightCm);
+    const crop = coverCrop(artwork.naturalWidth, artwork.naturalHeight, widthCm, heightCm, focus);
     const texW = Math.round(Math.min(crop.sw, 2048));
     const texH = Math.round(texW * (crop.sh / crop.sw));
     const tex = document.createElement("canvas");

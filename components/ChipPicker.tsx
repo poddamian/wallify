@@ -8,6 +8,8 @@ export type ChipItem = {
     label: string;
     /** Wyszarzony (np. kombinacja niedostępna), ale nadal klikalny */
     muted?: boolean;
+    /** Pomarańczowa kropka — np. zbyt niska jakość druku dla tego rozmiaru */
+    warn?: boolean;
 };
 
 interface ChipPickerProps {
@@ -61,6 +63,12 @@ export default function ChipPicker({ items, selectedId, onChange, ariaLabel }: C
                                     : "bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/40"}
                                 ${item.muted && !isActive ? "opacity-45 line-through decoration-white/50" : ""}`}
                         >
+                            {item.warn && (
+                                <span
+                                    aria-label="niska jakość druku"
+                                    className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 align-middle"
+                                />
+                            )}
                             {item.label}
                         </motion.button>
                     );

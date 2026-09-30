@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowRight,
@@ -30,7 +30,7 @@ import {
 } from "@/lib/photo";
 import { shortTitle } from "@/lib/product";
 import type { VariantSelection } from "@/hooks/useVariantSelection";
-import type { Product, ProductVariant, ViewerMode } from "@/types";
+import type { CanvasSize, Product, ProductVariant, ViewerMode } from "@/types";
 
 import PhotoStage from "./PhotoStage";
 import CalibrationRuler from "./CalibrationRuler";
@@ -57,6 +57,16 @@ interface PhotoViewerProps {
     onExit: () => void;
     /** Czy serwer ma skonfigurowane ulepszenie AI (GEMINI_API_KEY) */
     aiEnabled?: boolean;
+    /** Grafika zamiast zdjęcia produktu — np. zdjęcie klienta (blob: URL) */
+    artworkUrl?: string;
+    /** Położenie kadru grafiki (0–1) */
+    artworkFocus?: { x: number; y: number };
+    /** Dodatkowy pasek nad wyborem rozmiaru (np. zdjęcie klienta i jakość druku) */
+    extraPanel?: ReactNode;
+    recommended?: CanvasSize[];
+    lowQualityIds?: Set<string>;
+    cartStatus?: string | null;
+    blockedReason?: string;
 }
 
 function parseCm(value: string): number | null {
@@ -73,8 +83,16 @@ export default function PhotoViewer({
     isAddingToCart = false,
     onExit,
     aiEnabled = false,
+    artworkUrl,
+    artworkFocus,
+    extraPanel,
+    recommended,
+    lowQualityIds,
+    cartStatus,
+    blockedReason,
 }: PhotoViewerProps) {
     const { size } = selection;
+    const imageUrl = artworkUrl ?? product.imageUrl;
     const [step, setStep] = useState<Step>("pick");
     const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
     const [loadingPhoto, setLoadingPhoto] = useState(false);
@@ -101,7 +119,7 @@ export default function PhotoViewer({
     const [aiConsentOpen, setAiConsentOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const artworkRef = useRef<Promise<HTMLImageElement> | null>(null);
+    const artworkRef = useRef<{ url: string; image: Promise<HTMLImageElement> } | null>(null);
     const composedRef = useRef<{ key: string; blob: Promise<Blob> } | null>(null);
 
     const caption = `${shortTitle(product.title)} · ${size.label}`;
@@ -120,7 +138,7 @@ export default function PhotoViewer({
         return estimateLight(photo, quadFor(settledH, size.widthCm, size.heightCm));
     }, [lightOn, photo, settledH, size.widthCm, size.heightCm]);
 
-    const sceneKey = JSON.stringify([h, size.id, light, photo?.url]);
+    const sceneKey = JSON.stringify([h, size.id, light, photo?.url, imageUrl, artworkFocus]);
     const aiValid = Boolean(ai && ai.key === sceneKey);
     const showingAi = showAi && aiValid;
 
@@ -179,13 +197,14 @@ export default function PhotoViewer({
 
     // ─── Składanie obrazu (zapis / AI) ───────────────────────────────────────
     const getArtwork = () => {
-        if (!artworkRef.current) {
-            artworkRef.current = loadArtwork(product.imageUrl).catch((err) => {
+        if (artworkRef.current?.url !== imageUrl) {
+            const image = loadArtwork(imageUrl).catch((err) => {
                 artworkRef.current = null;
                 throw err;
             });
+            artworkRef.current = { url: imageUrl, image };
         }
-        return artworkRef.current;
+        return artworkRef.current.image;
     };
 
     const compose = useCallback(
@@ -199,11 +218,12 @@ export default function PhotoViewer({
                 widthCm: size.widthCm,
                 heightCm: size.heightCm,
                 light: light ?? NEUTRAL_LIGHT,
+                focus: artworkFocus,
                 caption: withCaption ? caption : undefined,
             });
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [photo, size.widthCm, size.heightCm, light, caption]
+        [photo, size.widthCm, size.heightCm, light, caption, imageUrl, artworkFocus]
     );
 
     /** Gotowy JPG do zapisu — przygotowany zawczasu, żeby menu „Udostępnij" otworzyło się od razu */
@@ -394,7 +414,8 @@ export default function PhotoViewer({
                                         onChange={updateH}
                                         onInteractionEnd={() => setSettledH(hRef.current)}
                                         size={size}
-                                        imageUrl={shopifySized(product.imageUrl, 1600)}
+                                        imageUrl={artworkUrl ?? shopifySized(product.imageUrl, 1600)}
+                                        focus={artworkFocus}
                                         light={light}
                                         view={view}
                                         photo={photo}
@@ -496,7 +517,13 @@ export default function PhotoViewer({
             {step === "place" && (
                 <div className="shrink-0 border-t border-white/10">
                     <div className="px-6 pt-3 pb-5 w-full max-w-xl mx-auto">
-                        <VariantControls product={product} selection={selection} />
+                        {extraPanel && <div className="mb-3">{extraPanel}</div>}
+                        <VariantControls
+                            product={product}
+                            selection={selection}
+                            recommended={recommended}
+                            lowQualityIds={lowQualityIds}
+                        />
 
                         <div className="flex flex-wrap justify-center gap-2 mt-3">
                             <ToggleChip
@@ -539,6 +566,8 @@ export default function PhotoViewer({
                             <AddToCartButton
                                 selection={selection}
                                 isLoading={isAddingToCart}
+                                statusText={cartStatus}
+                                blockedReason={blockedReason}
                                 onAddToCart={() => selection.variant && onAddToCart?.(selection.variant, "photo")}
                             />
                         </div>

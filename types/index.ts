@@ -36,6 +36,30 @@ export type Product = {
     sizes: CanvasSize[];
     options: ProductOption[];
     variants: ProductVariant[];
+    /** Obraz z własnego zdjęcia klienta (tag produktu „personalizowany obraz" lub „wallify-wlasne-zdjecie") */
+    personalized: boolean;
+};
+
+/** Zdjęcie klienta do druku — oryginał zostaje w pamięci przeglądarki do chwili zamówienia */
+export type CustomerArtwork = {
+    file: File;
+    /** blob: URL zmniejszonej kopii do podglądu */
+    previewUrl: string;
+    /** Wymiary oryginału (po obróceniu wg EXIF) */
+    width: number;
+    height: number;
+    /** Położenie kadru, 0–1 w poziomie i pionie (jak object-position) */
+    focus: { x: number; y: number };
+};
+
+/** Dane personalizacji wysyłane razem z pozycją koszyka */
+export type Personalization = {
+    file: File;
+    /** Kadr w pikselach oryginału */
+    crop: { x: number; y: number; width: number; height: number };
+    original: { width: number; height: number };
+    dpi: number;
+    qualityLabel: string;
 };
 
 /** Tryb podglądu, z którego klient dodał produkt do koszyka */

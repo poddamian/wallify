@@ -44,6 +44,10 @@ Zanim klikniesz "Deploy", musisz rozwinąć sekcję **Environment Variables** i 
     - `GEMINI_IMAGE_MODEL` — model (domyślnie `gemini-3.1-flash-image`),
     - `AI_LIMIT_PER_HOUR` — limit ulepszeń na jeden adres IP na godzinę (domyślnie 8).
 
+4.  *(opcjonalnie — obraz z własnego zdjęcia klienta, zapis w Shopify Files)*
+    `SHOPIFY_ADMIN_URL`, `SHOPIFY_ADMIN_CLIENT_ID`, `SHOPIFY_ADMIN_CLIENT_SECRET` —
+    jak je zdobyć, opisuje `PERSONALIZACJA.md`.
+
 ### Krok 4: Deploy
 Kliknij przycisk **Deploy**.
 

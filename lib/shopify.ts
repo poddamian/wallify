@@ -53,14 +53,19 @@ async function shopifyFetch<T>(
 // ─── Product ─────────────────────────────────────────────────────────────────
 
 const PRODUCT_QUERY = `
-  query GetProduct($handle: String!) {
+  query GetProduct($handle: String!, $after: String) {
     product(handle: $handle) {
       id
       title
+      tags
       featuredImage {
         url
       }
-      variants(first: 100) {
+      variants(first: 250, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           node {
             id
@@ -85,29 +90,44 @@ interface ShopifyProductData {
     product: {
         id: string;
         title: string;
+        tags: string[];
         featuredImage: { url: string } | null;
         variants: {
+            pageInfo: { hasNextPage: boolean; endCursor: string | null };
             edges: { node: RawVariant }[];
         };
     } | null;
 }
 
+/** Bezpiecznik: maks. 8 stron po 250 wariantów (Shopify pozwala na 2048 wariantów) */
+const MAX_VARIANT_PAGES = 8;
+
 /**
  * Pobiera produkt Shopify po handle (slug URL) i mapuje go na typ Product:
  * unikalne rozmiary, pozostałe opcje (np. Materiał) i warianty z prawdziwymi ID.
+ * Warianty są pobierane stronami — np. obraz ze zdjęcia ma ich 338.
  */
 export async function getProduct(handle: string): Promise<Product | null> {
-    const data = await shopifyFetch<ShopifyProductData>(PRODUCT_QUERY, { handle });
+    const first = await shopifyFetch<ShopifyProductData>(PRODUCT_QUERY, { handle });
+    if (!first.product) return null;
 
-    if (!data.product) return null;
+    const { id, title, tags, featuredImage } = first.product;
+    const variants = first.product.variants.edges.map(({ node }) => node);
 
-    const { id, title, featuredImage, variants } = data.product;
+    let page = first.product.variants.pageInfo;
+    for (let i = 1; i < MAX_VARIANT_PAGES && page.hasNextPage && page.endCursor; i++) {
+        const next = await shopifyFetch<ShopifyProductData>(PRODUCT_QUERY, { handle, after: page.endCursor });
+        if (!next.product) break;
+        variants.push(...next.product.variants.edges.map(({ node }) => node));
+        page = next.product.variants.pageInfo;
+    }
 
     return buildProduct({
         id,
         title,
+        tags,
         imageUrl: featuredImage?.url ?? "/demo-canvas.jpg",
-        variants: variants.edges.map(({ node }) => node),
+        variants,
     });
 }
 

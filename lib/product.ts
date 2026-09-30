@@ -19,8 +19,12 @@ export type RawProduct = {
     id: string;
     title: string;
     imageUrl: string;
+    tags?: string[];
     variants: RawVariant[];
 };
+
+/** Tagi produktu, które włączają wgrywanie własnego zdjęcia klienta */
+export const PERSONALIZED_TAGS = ["wallify-wlasne-zdjecie", "personalizowany obraz"];
 
 const SIZE_OPTION_NAME = /rozmiar|size|wymiar|format/i;
 
@@ -110,7 +114,9 @@ export function buildProduct(raw: RawProduct): Product {
         for (const v of variants) v.sizeId = FALLBACK_SIZE.id;
     }
 
-    return { id: raw.id, title: raw.title, imageUrl: raw.imageUrl, sizes, options, variants };
+    const personalized = (raw.tags ?? []).some((t) => PERSONALIZED_TAGS.includes(t.trim().toLowerCase()));
+
+    return { id: raw.id, title: raw.title, imageUrl: raw.imageUrl, sizes, options, variants, personalized };
 }
 
 /** Wariant pasujący do wybranego rozmiaru i opcji (albo undefined, jeśli takiej kombinacji nie ma). */
@@ -162,4 +168,79 @@ export function formatPrice(money: Money): string {
 export function shortTitle(title: string, max = 48): string {
     const head = title.split(/\s[–—-]\s/)[0].trim();
     return head.length > max ? `${head.slice(0, max - 1).trimEnd()}…` : head;
+}
+
+// ─── Rozmiary i zdjęcie klienta ──────────────────────────────────────────────
+
+export type Orientation = "landscape" | "portrait" | "square";
+
+export function orientationOf(widthCm: number, heightCm: number): Orientation {
+    const r = Math.log(widthCm / heightCm);
+    if (Math.abs(r) < 0.03) return "square";
+    return r > 0 ? "landscape" : "portrait";
+}
+
+export const ORIENTATION_LABEL: Record<Orientation, string> = {
+    landscape: "Poziome",
+    portrait: "Pionowe",
+    square: "Kwadratowe",
+};
+
+/**
+ * Rozmiary o proporcjach najbliższych zdjęciu (najmniej przycinania), maks. `max` sztuk,
+ * posortowane od najmniejszego. Tolerancja rośnie, dopóki nie znajdzie się kilka propozycji.
+ * Gdy żaden nie pasuje (np. panorama) — rozmiary w tej samej orientacji.
+ */
+export function recommendSizes(sizes: CanvasSize[], aspect: number, max = 12): CanvasSize[] {
+    const byArea = (a: CanvasSize, b: CanvasSize) => a.widthCm * a.heightCm - b.widthCm * b.heightCm;
+    const misfit = (s: CanvasSize) => Math.abs(Math.log(s.widthCm / s.heightCm / aspect));
+
+    for (const tolerance of [0.06, 0.1, 0.15]) {
+        const close = sizes.filter((s) => misfit(s) <= tolerance);
+        if (close.length >= 6 || tolerance === 0.15) {
+            if (close.length === 0) break;
+            return [...close].sort((a, b) => misfit(a) - misfit(b)).slice(0, max).sort(byArea);
+        }
+    }
+    const o = orientationOf(aspect, 1);
+    return sizes.filter((s) => orientationOf(s.widthCm, s.heightCm) === o).sort(byArea).slice(0, max);
+}
+
+export type QualityLevel = "excellent" | "good" | "fair" | "low";
+
+/**
+ * Jakość druku wg rozdzielczości: ile pikseli zdjęcia przypada na cal płótna.
+ * Na płótnie (ogląda się je z dystansu) 100+ DPI to bardzo dobrze, poniżej ok. 45 widać rozmycie.
+ */
+export function printQuality(pixelsAcross: number, cmAcross: number): {
+    dpi: number;
+    level: QualityLevel;
+    label: string;
+} {
+    const dpi = Math.round(pixelsAcross / (cmAcross / 2.54));
+    if (dpi >= 100) return { dpi, level: "excellent", label: "bardzo dobra" };
+    if (dpi >= 65) return { dpi, level: "good", label: "dobra" };
+    if (dpi >= 45) return { dpi, level: "fair", label: "średnia — z bliska może być lekko miękka" };
+    return { dpi, level: "low", label: "za niska na ten rozmiar" };
+}
+
+/**
+ * Wycinek obrazu o proporcjach rozmiaru (jak object-fit: cover), przesunięty wg `focus` (0–1).
+ * Zwraca prostokąt w pikselach obrazu.
+ */
+export function coverCrop(
+    imgW: number,
+    imgH: number,
+    widthCm: number,
+    heightCm: number,
+    focus: { x: number; y: number } = { x: 0.5, y: 0.5 }
+) {
+    const target = widthCm / heightCm;
+    const source = imgW / imgH;
+    if (source > target) {
+        const sw = imgH * target;
+        return { sx: (imgW - sw) * focus.x, sy: 0, sw, sh: imgH };
+    }
+    const sh = imgW / target;
+    return { sx: 0, sy: (imgH - sh) * focus.y, sw: imgW, sh };
 }

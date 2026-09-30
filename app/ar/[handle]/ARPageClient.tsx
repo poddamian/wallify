@@ -3,7 +3,9 @@
 import { useState, useCallback } from "react";
 import ARViewer from "@/components/ARViewer";
 import { createCart, addToCart } from "@/lib/shopify";
-import type { Product, ProductVariant, ViewerMode } from "@/types";
+import CheckoutReady from "@/components/personalization/CheckoutReady";
+import { uploadCustomerPhoto, type UploadedPhoto } from "@/lib/upload-client";
+import type { Personalization, Product, ProductVariant, ViewerMode } from "@/types";
 
 const CART_ID_KEY = "wallify_cart_id";
 
@@ -29,51 +31,102 @@ interface ARPageClientProps {
     product: Product;
     initialMode?: ViewerMode;
     aiEnabled?: boolean;
+    /** Czy serwer ma dostęp do Shopify Files (zdjęcia klientów trafiają wtedy do zamówienia) */
+    uploadsEnabled?: boolean;
 }
 
-export default function ARPageClient({ product, initialMode, aiEnabled }: ARPageClientProps) {
+type CartAttribute = { key: string; value: string };
+
+function personalizationAttributes(p: Personalization, uploaded: UploadedPhoto): CartAttribute[] {
+    return [
+        { key: "Personalizacja", value: "Twoje zdjęcie" },
+        // Klucze z "_" są ukryte dla klienta, ale widoczne w zamówieniu w panelu Shopify
+        { key: "_Zdjęcie", value: uploaded.url },
+        { key: "_Zdjęcie w panelu", value: uploaded.adminUrl },
+        {
+            key: "_Kadr",
+            value: `x ${p.crop.x}, y ${p.crop.y}, ${p.crop.width} × ${p.crop.height} px (oryginał ${p.original.width} × ${p.original.height} px)`,
+        },
+        { key: "_Jakość druku", value: `${p.qualityLabel} (${p.dpi} DPI)` },
+    ];
+}
+
+async function addLine(variantId: string, attributes: CartAttribute[]): Promise<string> {
+    const savedCartId = readCartId();
+    try {
+        if (!savedCartId) throw new Error("Brak koszyka");
+        return await addToCart(savedCartId, variantId, 1, attributes);
+    } catch {
+        // Koszyk nie istnieje albo wygasł (Shopify trzyma koszyki ~10 dni) — tworzymy nowy i próbujemy raz jeszcze
+        const cart = await createCart();
+        saveCartId(cart.cartId);
+        return addToCart(cart.cartId, variantId, 1, attributes);
+    }
+}
+
+export default function ARPageClient({ product, initialMode, aiEnabled, uploadsEnabled = false }: ARPageClientProps) {
     const [isAddingToCart, setIsAddingToCart] = useState(false);
+    const [cartStatus, setCartStatus] = useState<string | null>(null);
+    /** Po wysyłce zdjęcia klient sam klika „Przejdź do kasy" — przeglądarki blokują
+     *  automatyczne przejście z ramki iframe, gdy od kliknięcia minęło za dużo czasu */
+    const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
-    const handleAddToCart = useCallback(async (variant: ProductVariant, mode: ViewerMode) => {
-        // Ukryty atrybut linii (klucz z "_") — w zamówieniu widać, z którego podglądu przyszedł klient
-        const attributes = [{ key: "_Wallify", value: mode === "photo" ? "ze zdjęcia" : "na żywo" }];
+    const handleAddToCart = useCallback(
+        async (variant: ProductVariant, mode: ViewerMode, personalization?: Personalization) => {
+            // Ukryty atrybut linii — w zamówieniu widać, z którego podglądu przyszedł klient
+            const attributes: CartAttribute[] = [
+                { key: "_Wallify", value: mode === "photo" ? "ze zdjęcia" : "na żywo" },
+            ];
 
-        setIsAddingToCart(true);
-        try {
-            let checkoutUrl: string;
-            const savedCartId = readCartId();
-
+            setIsAddingToCart(true);
             try {
-                if (!savedCartId) throw new Error("Brak koszyka");
-                checkoutUrl = await addToCart(savedCartId, variant.id, 1, attributes);
-            } catch {
-                // Koszyk nie istnieje albo wygasł (Shopify trzyma koszyki ~10 dni) — tworzymy nowy i próbujemy raz jeszcze
-                const cart = await createCart();
-                saveCartId(cart.cartId);
-                checkoutUrl = await addToCart(cart.cartId, variant.id, 1, attributes);
-            }
+                if (personalization && uploadsEnabled) {
+                    setCartStatus("Wysyłanie zdjęcia… 0%");
+                    const uploaded = await uploadCustomerPhoto(personalization.file, (f) =>
+                        setCartStatus(f === null ? "Wysyłanie zdjęcia…" : `Wysyłanie zdjęcia… ${Math.round(f * 100)}%`)
+                    );
+                    attributes.push(...personalizationAttributes(personalization, uploaded));
+                } else if (personalization) {
+                    // Wysyłka do Shopify nieskonfigurowana — zostaje dotychczasowa droga mailowa
+                    attributes.push({ key: "Personalizacja", value: "zdjęcie prześlę mailem" });
+                }
 
-            // Przekieruj do kasy Shopify — window.top, aby wyjść z ramki iframe
-            const target = window.top || window;
-            target.location.href = checkoutUrl;
-        } catch (err) {
-            console.error("[Wallify] Błąd dodawania do koszyka:", err);
-            saveCartId(null);
-            alert("Wystąpił błąd podczas dodawania do koszyka. Spróbuj ponownie.");
-        } finally {
-            setIsAddingToCart(false);
-        }
-    }, []);
+                setCartStatus("Dodawanie do koszyka…");
+                const url = await addLine(variant.id, attributes);
+
+                if (personalization && uploadsEnabled) {
+                    setCheckoutUrl(url);
+                } else {
+                    // Przekieruj do kasy Shopify — window.top, aby wyjść z ramki iframe
+                    (window.top || window).location.href = url;
+                }
+            } catch (err) {
+                console.error("[Wallify] Błąd dodawania do koszyka:", err);
+                saveCartId(null);
+                alert(
+                    personalization
+                        ? "Nie udało się wysłać zdjęcia lub dodać go do koszyka. Sprawdź połączenie i spróbuj ponownie."
+                        : "Wystąpił błąd podczas dodawania do koszyka. Spróbuj ponownie."
+                );
+            } finally {
+                setIsAddingToCart(false);
+                setCartStatus(null);
+            }
+        },
+        [uploadsEnabled]
+    );
 
     return (
-        <main className="bg-black min-h-dvh">
+        <main className="relative bg-black min-h-dvh">
             <ARViewer
                 product={product}
                 onAddToCart={handleAddToCart}
                 isAddingToCart={isAddingToCart}
+                cartStatus={cartStatus}
                 initialMode={initialMode}
                 aiEnabled={aiEnabled}
             />
+            {checkoutUrl && <CheckoutReady url={checkoutUrl} onClose={() => setCheckoutUrl(null)} />}
         </main>
     );
 }
