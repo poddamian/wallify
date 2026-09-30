@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, RefreshCw } from "lucide-react";
+import { Camera, ImagePlus, RefreshCw } from "lucide-react";
 
 import { useCamera } from "@/hooks/useCamera";
 import { useVariantSelection } from "@/hooks/useVariantSelection";
@@ -10,6 +10,7 @@ import { shortTitle } from "@/lib/product";
 import CanvasOverlay from "./CanvasOverlay";
 import VariantControls from "./VariantControls";
 import AddToCartButton from "./AddToCartButton";
+import PhotoViewer from "./photo/PhotoViewer";
 import type { ARState, Product, ProductVariant, ViewerMode } from "@/types";
 
 interface ARViewerProps {
@@ -18,10 +19,22 @@ interface ARViewerProps {
     onAddToCart?: (variant: ProductVariant, mode: ViewerMode) => void;
     /** Przekazywane do AddToCartButton — blokuje przycisk podczas wywołania API */
     isAddingToCart?: boolean;
+    /** "photo" otwiera od razu tryb ze zdjęcia (np. z linku ?tryb=zdjecie) */
+    initialMode?: ViewerMode;
+    /** Czy serwer ma włączone ulepszenie AI */
+    aiEnabled?: boolean;
 }
 
-export default function ARViewer({ product, onAddToCart, isAddingToCart = false }: ARViewerProps) {
-    const [arState, setArState] = useState<ARState>("idle");
+export default function ARViewer({
+    product,
+    onAddToCart,
+    isAddingToCart = false,
+    initialMode = "live",
+    aiEnabled = false,
+}: ARViewerProps) {
+    const [arState, setArState] = useState<ARState>(initialMode === "photo" ? "photo" : "idle");
+    // Na komputerze (bez ekranu dotykowego) kamera tylnia nie istnieje — tam głównym przyciskiem jest zdjęcie
+    const [prefersPhoto, setPrefersPhoto] = useState(false);
     const selection = useVariantSelection(product);
     const { attachVideo, status, error, startCamera, stopCamera } = useCamera();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -42,6 +55,29 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
         stopCamera();
         setArState("idle");
     };
+
+    const openPhotoMode = () => {
+        stopCamera();
+        setArState("photo");
+    };
+
+    useEffect(() => {
+        setPrefersPhoto(!window.matchMedia("(pointer: coarse)").matches);
+    }, []);
+
+    // ─── ZE ZDJĘCIA ──────────────────────────────────────────────────────────
+    if (arState === "photo") {
+        return (
+            <PhotoViewer
+                product={product}
+                selection={selection}
+                onAddToCart={onAddToCart}
+                isAddingToCart={isAddingToCart}
+                onExit={() => setArState("idle")}
+                aiEnabled={aiEnabled}
+            />
+        );
+    }
 
     // ─── IDLE ────────────────────────────────────────────────────────────────
     if (arState === "idle") {
@@ -66,15 +102,37 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
                     </p>
                 </div>
 
-                <motion.button
-                    onClick={handleStart}
-                    whileTap={{ scale: 0.95 }}
-                    whileHover={{ scale: 1.03 }}
-                    className="bg-white text-black px-8 py-4 rounded-full text-base font-bold
-                     shadow-[0_4px_24px_rgba(255,255,255,0.2)] transition-shadow"
-                >
-                    Przymierz na ścianie →
-                </motion.button>
+                <div className={`flex flex-col items-center gap-3 ${prefersPhoto ? "flex-col-reverse" : ""}`}>
+                    <motion.button
+                        onClick={handleStart}
+                        whileTap={{ scale: 0.95 }}
+                        whileHover={{ scale: 1.03 }}
+                        className={`inline-flex items-center gap-2 px-8 py-4 rounded-full text-base font-bold transition-shadow
+                            ${prefersPhoto
+                                ? "border border-white/25 text-white hover:border-white/50"
+                                : "bg-white text-black shadow-[0_4px_24px_rgba(255,255,255,0.2)]"}`}
+                    >
+                        <Camera className="w-5 h-5" />
+                        Przymierz na ścianie →
+                    </motion.button>
+                    <motion.button
+                        onClick={openPhotoMode}
+                        whileTap={{ scale: 0.95 }}
+                        whileHover={{ scale: 1.03 }}
+                        className={`inline-flex items-center gap-2 px-8 py-4 rounded-full text-base font-bold transition-shadow
+                            ${prefersPhoto
+                                ? "bg-white text-black shadow-[0_4px_24px_rgba(255,255,255,0.2)]"
+                                : "border border-white/25 text-white hover:border-white/50"}`}
+                    >
+                        <ImagePlus className="w-5 h-5" />
+                        Użyj zdjęcia ściany
+                    </motion.button>
+                    <p className="text-white/40 text-xs">
+                        {prefersPhoto
+                            ? "Na komputerze najwygodniej ze zdjęcia pokoju."
+                            : "Nie stoisz przed ścianą? Wgraj jej zdjęcie."}
+                    </p>
+                </div>
             </motion.div>
         );
     }
@@ -140,6 +198,14 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
                         <p className="text-white/50 text-sm max-w-xs">{error}</p>
                     </div>
                 )}
+
+                <button
+                    onClick={openPhotoMode}
+                    className="inline-flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full text-sm font-bold"
+                >
+                    <ImagePlus className="w-4 h-4" />
+                    Użyj zdjęcia ściany
+                </button>
 
                 <button
                     onClick={handleReset}

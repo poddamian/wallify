@@ -4,17 +4,27 @@ import ARPageClient from "./ARPageClient";
 
 interface ARPageProps {
     params: Promise<{ handle: string }>;
+    searchParams: Promise<{ tryb?: string }>;
 }
 
-export default async function ARPage({ params }: ARPageProps) {
+export default async function ARPage({ params, searchParams }: ARPageProps) {
     const { handle } = await params;
+    const { tryb } = await searchParams;
     const product = await getProduct(handle);
 
     if (!product) {
         notFound();
     }
 
-    return <ARPageClient product={product} />;
+    return (
+        <ARPageClient
+            product={product}
+            // /ar/<handle>?tryb=zdjecie — od razu tryb ze zdjęcia (np. osobny przycisk na stronie produktu)
+            initialMode={tryb === "zdjecie" ? "photo" : "live"}
+            // Ulepszenie AI pojawia się tylko, gdy w Vercel ustawiono GEMINI_API_KEY
+            aiEnabled={Boolean(process.env.GEMINI_API_KEY)}
+        />
+    );
 }
 
 // Metadane SEO na podstawie produktu (opcjonalnie)

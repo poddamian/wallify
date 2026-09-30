@@ -58,6 +58,22 @@ wallify/
 
 ## Główne funkcjonalności
 
+### 🖼️ Tryb „Ze zdjęcia" (`components/photo/`)
+Dla klientów, którzy nie stoją przed ścianą, i dla komputerów bez tylnej kamery.
+- **Wgranie zdjęcia** — zmniejszane w przeglądarce do 2048 px, nigdzie nie wysyłane
+- **Kalibracja skali** — miarka z lupą; klient zaznacza drzwi / kartkę A4 / własny wymiar.
+  To jedyny tryb, w którym skala jest naprawdę prawdziwa (w trybie na żywo zależy od odległości)
+- **Prawdziwa grafika produktu** — bez generowania, w perspektywie (homografia, `lib/homography.ts`)
+- **Perspektywa** — 4 uchwyty narożników + „Wyprostuj"
+- **Światło** — obraz przyciemniany do jasności i barwy światła wokół niego (`estimateLight`)
+- **Zapisz / wyślij** — JPG z podpisem (menu Udostępnij albo pobranie)
+- **Ulepsz AI** (opcjonalnie) — `app/api/enhance`, Gemini, tylko po zgodzie klienta
+- Otwieranie od razu: `/ar/<handle>?tryb=zdjecie`
+
+### 🛒 Warianty i koszyk (`lib/product.ts`)
+- Rozmiary, materiał, ceny i dostępność z wariantów Shopify
+- Do koszyka trafia dokładnie wybrany wariant + ukryty atrybut `_Wallify` (tryb podglądu)
+
 ### 🎬 Maszyna stanów AR (`ARViewer.tsx`)
 Pięć stanów zarządzanych przez `useState`:
 - **`idle`** — ekran startowy z przyciskiem „Przymierz na ścianie"
@@ -114,12 +130,13 @@ npm run dev
 
 | Priorytet | Funkcja |
 |---|---|
-| 🔴 Wysoki | Integracja Shopify Storefront API — prawdziwe dane produktu |
-| 🔴 Wysoki | Shopify Buy SDK — faktyczne dodawanie do koszyka |
-| 🟡 Średni | Przeciąganie nakładki — `useDrag` (Framer Motion) |
+| ✅ Zrobione | Integracja Shopify Storefront API — prawdziwe dane produktu i warianty |
+| ✅ Zrobione | Dodawanie wybranego wariantu do koszyka |
+| ✅ Zrobione | Przeciąganie nakładki |
+| ✅ Zrobione | Tryb ze zdjęcia ściany + zapis podglądu |
+| 🟡 Średni | Obrazy wieloczęściowe (panele z odstępami) w trybie ze zdjęcia |
 | 🟡 Średni | Suwak odległości — dokładna skala w zależności od dystansu do ściany |
 | 🟢 Niski | Wykrywanie orientacji telefonu (`deviceorientation` API) |
-| 🟢 Niski | Zrzut ekranu — funkcja zapisu podglądu AR |
 | 🟢 Niski | Obsługa wielu produktów — przeglądanie w widoku AR |
 
 ---

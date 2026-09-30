@@ -47,6 +47,7 @@ export type ARState =
     | "denied"      // Permission denied
     | "scanning"    // Camera active, looking for wall
     | "placed"      // Canvas placed on wall
+    | "photo"       // Tryb ze zdjęcia ściany
     | "error";      // Something went wrong
 
 export type CameraStatus = "idle" | "loading" | "active" | "denied" | "error";

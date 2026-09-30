@@ -27,9 +27,11 @@ function saveCartId(cartId: string | null) {
 
 interface ARPageClientProps {
     product: Product;
+    initialMode?: ViewerMode;
+    aiEnabled?: boolean;
 }
 
-export default function ARPageClient({ product }: ARPageClientProps) {
+export default function ARPageClient({ product, initialMode, aiEnabled }: ARPageClientProps) {
     const [isAddingToCart, setIsAddingToCart] = useState(false);
 
     const handleAddToCart = useCallback(async (variant: ProductVariant, mode: ViewerMode) => {
@@ -69,6 +71,8 @@ export default function ARPageClient({ product }: ARPageClientProps) {
                 product={product}
                 onAddToCart={handleAddToCart}
                 isAddingToCart={isAddingToCart}
+                initialMode={initialMode}
+                aiEnabled={aiEnabled}
             />
         </main>
     );
