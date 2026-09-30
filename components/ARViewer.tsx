@@ -5,31 +5,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Camera, RefreshCw } from "lucide-react";
 
 import { useCamera } from "@/hooks/useCamera";
+import { useVariantSelection } from "@/hooks/useVariantSelection";
+import { shortTitle } from "@/lib/product";
 import CanvasOverlay from "./CanvasOverlay";
-import SizePicker from "./SizePicker";
+import VariantControls from "./VariantControls";
 import AddToCartButton from "./AddToCartButton";
-import type { ARState, CanvasSize, Product } from "@/types";
-
-/** Rozmiary poziome dostępne w sklepie (szerokość × wysokość w cm) */
-const SIZES: CanvasSize[] = [
-    { id: "s1", label: "30 × 20 cm", widthCm: 30, heightCm: 20 },
-    { id: "s2", label: "40 × 30 cm", widthCm: 40, heightCm: 30 },
-    { id: "s3", label: "70 × 50 cm", widthCm: 70, heightCm: 50 },
-    { id: "s4", label: "90 × 60 cm", widthCm: 90, heightCm: 60 },
-    { id: "s5", label: "100 × 70 cm", widthCm: 100, heightCm: 70 },
-    { id: "s6", label: "120 × 80 cm", widthCm: 120, heightCm: 80 },
-];
+import type { ARState, Product, ProductVariant, ViewerMode } from "@/types";
 
 interface ARViewerProps {
     product: Product;
-    onAddToCart?: (size: CanvasSize) => void;
+    /** Dostaje dokładnie ten wariant (rozmiar + opcje), który wybrał klient */
+    onAddToCart?: (variant: ProductVariant, mode: ViewerMode) => void;
     /** Przekazywane do AddToCartButton — blokuje przycisk podczas wywołania API */
     isAddingToCart?: boolean;
 }
 
 export default function ARViewer({ product, onAddToCart, isAddingToCart = false }: ARViewerProps) {
     const [arState, setArState] = useState<ARState>("idle");
-    const [selectedSize, setSelectedSize] = useState<CanvasSize>(SIZES[2]); // 70×50 jako domyślny
+    const selection = useVariantSelection(product);
     const { attachVideo, status, error, startCamera, stopCamera } = useCamera();
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +61,7 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
                     </h2>
                     <p className="text-white/50 text-sm max-w-xs leading-relaxed">
                         Skieruj kamerę na ścianę i od razu sprawdź, jak&nbsp;
-                        <span className="text-white font-medium">{product.title}</span> będzie
+                        <span className="text-white font-medium">{shortTitle(product.title)}</span> będzie
                         prezentować się w Twoim wnętrzu.
                     </p>
                 </div>
@@ -172,7 +165,7 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
             />
 
             {/* Nakładka z obrazem produktu */}
-            <CanvasOverlay imageUrl={product.imageUrl} size={selectedSize} containerRef={containerRef} />
+            <CanvasOverlay imageUrl={product.imageUrl} size={selection.size} containerRef={containerRef} />
 
             {/* Dolne sterowanie */}
             <AnimatePresence>
@@ -184,14 +177,14 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: 0.3, type: "spring", stiffness: 200, damping: 24 }}
                 >
-                    <SizePicker
-                        sizes={SIZES}
-                        selected={selectedSize}
-                        onChange={setSelectedSize}
-                    />
+                    <VariantControls product={product} selection={selection} />
 
                     <div className="mt-4">
-                        <AddToCartButton size={selectedSize} onAddToCart={onAddToCart} isLoading={isAddingToCart} />
+                        <AddToCartButton
+                            selection={selection}
+                            isLoading={isAddingToCart}
+                            onAddToCart={() => selection.variant && onAddToCart?.(selection.variant, "live")}
+                        />
                     </div>
 
                     <div className="mt-3 text-center">
@@ -207,8 +200,8 @@ export default function ARViewer({ product, onAddToCart, isAddingToCart = false 
 
             {/* Nazwa produktu – górny lewy róg */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
-                <span className="text-white/80 text-xs font-medium bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                    {product.title}
+                <span className="max-w-full truncate text-white/80 text-xs font-medium bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                    {shortTitle(product.title)}
                 </span>
             </div>
         </div>

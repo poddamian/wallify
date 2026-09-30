@@ -3,9 +3,27 @@
 import { useState, useCallback } from "react";
 import ARViewer from "@/components/ARViewer";
 import { createCart, addToCart } from "@/lib/shopify";
-import type { CanvasSize, Product } from "@/types";
+import type { Product, ProductVariant, ViewerMode } from "@/types";
 
 const CART_ID_KEY = "wallify_cart_id";
+
+// localStorage w iframe innej domeny bywa zablokowany (np. Safari) — wtedy po prostu tworzymy nowy koszyk
+function readCartId(): string | null {
+    try {
+        return localStorage.getItem(CART_ID_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function saveCartId(cartId: string | null) {
+    try {
+        if (cartId) localStorage.setItem(CART_ID_KEY, cartId);
+        else localStorage.removeItem(CART_ID_KEY);
+    } catch {
+        /* brak dostępu do localStorage — ignorujemy */
+    }
+}
 
 interface ARPageClientProps {
     product: Product;
@@ -14,43 +32,36 @@ interface ARPageClientProps {
 export default function ARPageClient({ product }: ARPageClientProps) {
     const [isAddingToCart, setIsAddingToCart] = useState(false);
 
-    const handleAddToCart = useCallback(
-        async (size: CanvasSize) => {
-            // Użyj shopifyVariantId z wybranego rozmiaru (ustawionego przez getProduct),
-            // albo fallback do wariantu z produktu
-            const variantId = size.shopifyVariantId ?? product.shopifyVariantId;
+    const handleAddToCart = useCallback(async (variant: ProductVariant, mode: ViewerMode) => {
+        // Ukryty atrybut linii (klucz z "_") — w zamówieniu widać, z którego podglądu przyszedł klient
+        const attributes = [{ key: "_Wallify", value: mode === "photo" ? "ze zdjęcia" : "na żywo" }];
 
-            setIsAddingToCart(true);
+        setIsAddingToCart(true);
+        try {
+            let checkoutUrl: string;
+            const savedCartId = readCartId();
+
             try {
-                // Pobierz lub utwórz cartId z localStorage
-                let cartId = localStorage.getItem(CART_ID_KEY);
-                if (!cartId) {
-                    const cart = await createCart();
-                    cartId = cart.cartId;
-                    localStorage.setItem(CART_ID_KEY, cartId);
-                }
-
-                // Dodaj produkt do koszyka i pobierz URL do kasy
-                const checkoutUrl = await addToCart(cartId, variantId, 1);
-
-                // Przekieruj do kasy Shopify - używamy window.top, aby wyjść z ramki iframe
-                if (typeof window !== "undefined") {
-                    const target = window.top || window;
-                    target.location.href = checkoutUrl;
-                }
-            } catch (err) {
-                console.error("[Wallify] Błąd dodawania do koszyka:", err);
-
-                // Jeśli koszyk wygasł (Shopify koszyki wygasają po ~10 dniach),
-                // usuń stary cartId i spróbuj ponownie
-                localStorage.removeItem(CART_ID_KEY);
-                alert("Wystąpił błąd podczas dodawania do koszyka. Spróbuj ponownie.");
-            } finally {
-                setIsAddingToCart(false);
+                if (!savedCartId) throw new Error("Brak koszyka");
+                checkoutUrl = await addToCart(savedCartId, variant.id, 1, attributes);
+            } catch {
+                // Koszyk nie istnieje albo wygasł (Shopify trzyma koszyki ~10 dni) — tworzymy nowy i próbujemy raz jeszcze
+                const cart = await createCart();
+                saveCartId(cart.cartId);
+                checkoutUrl = await addToCart(cart.cartId, variant.id, 1, attributes);
             }
-        },
-        [product.shopifyVariantId]
-    );
+
+            // Przekieruj do kasy Shopify — window.top, aby wyjść z ramki iframe
+            const target = window.top || window;
+            target.location.href = checkoutUrl;
+        } catch (err) {
+            console.error("[Wallify] Błąd dodawania do koszyka:", err);
+            saveCartId(null);
+            alert("Wystąpił błąd podczas dodawania do koszyka. Spróbuj ponownie.");
+        } finally {
+            setIsAddingToCart(false);
+        }
+    }, []);
 
     return (
         <main className="bg-black min-h-dvh">

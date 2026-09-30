@@ -4,7 +4,8 @@
  * Nie wymaga żadnych zewnętrznych bibliotek — używa natywnego fetch.
  */
 
-import type { CanvasSize, Product } from "@/types";
+import type { Product } from "@/types";
+import { buildProduct, type RawVariant } from "@/lib/product";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ async function shopifyFetch<T>(
     return json.data as T;
 }
 
-// ─── Product ──────────────────────────────────────────────────────────────────
+// ─── Product ─────────────────────────────────────────────────────────────────
 
 const PRODUCT_QUERY = `
   query GetProduct($handle: String!) {
@@ -59,11 +60,16 @@ const PRODUCT_QUERY = `
       featuredImage {
         url
       }
-      variants(first: 20) {
+      variants(first: 100) {
         edges {
           node {
             id
             title
+            availableForSale
+            price {
+              amount
+              currencyCode
+            }
             selectedOptions {
               name
               value
@@ -81,31 +87,14 @@ interface ShopifyProductData {
         title: string;
         featuredImage: { url: string } | null;
         variants: {
-            edges: {
-                node: {
-                    id: string;
-                    title: string;
-                    selectedOptions: { name: string; value: string }[];
-                };
-            }[];
+            edges: { node: RawVariant }[];
         };
     } | null;
 }
 
 /**
- * Parsuje wartość rozmiaru wariantu (np. "70x50 cm" lub "70 × 50 cm")
- * i zwraca { widthCm, heightCm } lub null jeśli nie można sparsować.
- */
-function parseSize(value: string): { widthCm: number; heightCm: number } | null {
-    // Obsługuje formaty: "70x50 cm", "70X50cm", "70 × 50 cm", "70×50"
-    const match = value.replace(/\s/g, "").match(/^(\d+)[xX×](\d+)/);
-    if (!match) return null;
-    return { widthCm: Number(match[1]), heightCm: Number(match[2]) };
-}
-
-/**
- * Pobiera produkt Shopify po handle (slug URL) i mapuje go na typ Product.
- * Warianty z opcją zawierającą "rozmiar"/"size" są mapowane na CanvasSize[].
+ * Pobiera produkt Shopify po handle (slug URL) i mapuje go na typ Product:
+ * unikalne rozmiary, pozostałe opcje (np. Materiał) i warianty z prawdziwymi ID.
  */
 export async function getProduct(handle: string): Promise<Product | null> {
     const data = await shopifyFetch<ShopifyProductData>(PRODUCT_QUERY, { handle });
@@ -114,49 +103,12 @@ export async function getProduct(handle: string): Promise<Product | null> {
 
     const { id, title, featuredImage, variants } = data.product;
 
-    // Mapuj warianty Shopify → CanvasSize
-    // Szukamy opcji, której nazwa zawiera "rozmiar" lub "size" (case-insensitive)
-    const availableSizes: CanvasSize[] = variants.edges
-        .map(({ node }) => {
-            const sizeOption = node.selectedOptions.find((opt) =>
-                /rozmiar|size/i.test(opt.name)
-            );
-            if (!sizeOption) return null;
-
-            const dims = parseSize(sizeOption.value);
-            if (!dims) return null;
-
-            return {
-                id: node.id, // GID Shopify, np. "gid://shopify/ProductVariant/123"
-                label: `${dims.widthCm} × ${dims.heightCm} cm`,
-                widthCm: dims.widthCm,
-                heightCm: dims.heightCm,
-                shopifyVariantId: node.id,
-            } satisfies CanvasSize & { shopifyVariantId: string };
-        })
-        .filter((s): s is NonNullable<typeof s> => s !== null);
-
-    // Fallback: jeśli produkt nie ma opcji rozmiaru, utwórz jeden wariant z pełnym tytułem
-    if (availableSizes.length === 0) {
-        const firstVariant = variants.edges[0]?.node;
-        if (firstVariant) {
-            availableSizes.push({
-                id: firstVariant.id,
-                label: firstVariant.title,
-                widthCm: 70,
-                heightCm: 50,
-                shopifyVariantId: firstVariant.id,
-            } as CanvasSize & { shopifyVariantId: string });
-        }
-    }
-
-    return {
+    return buildProduct({
         id,
         title,
         imageUrl: featuredImage?.url ?? "/demo-canvas.jpg",
-        availableSizes,
-        shopifyVariantId: availableSizes[0]?.id ?? "",
-    };
+        variants: variants.edges.map(({ node }) => node),
+    });
 }
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
@@ -212,15 +164,22 @@ interface AddToCartData {
     };
 }
 
-/** Dodaje wariant do koszyka. Zwraca aktualny checkoutUrl. */
+export type CartLineAttribute = { key: string; value: string };
+
+/**
+ * Dodaje wariant do koszyka. Zwraca aktualny checkoutUrl.
+ * Atrybuty z kluczem zaczynającym się od "_" są ukryte dla klienta,
+ * ale widać je w zamówieniu w panelu Shopify.
+ */
 export async function addToCart(
     cartId: string,
     merchandiseId: string,
-    quantity = 1
+    quantity = 1,
+    attributes: CartLineAttribute[] = []
 ): Promise<string> {
     const data = await shopifyFetch<AddToCartData>(ADD_TO_CART_MUTATION, {
         cartId,
-        lines: [{ merchandiseId, quantity }],
+        lines: [{ merchandiseId, quantity, attributes }],
     });
 
     if (data.cartLinesAdd.userErrors.length > 0) {
