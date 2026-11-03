@@ -13,6 +13,8 @@ interface CanvasOverlayProps {
     /** Ref to the AR container div — used as drag boundary */
     containerRef: RefObject<HTMLDivElement | null>;
     scaleFactor?: number;
+    /** Położenie kadru grafiki (0–1) — dla zdjęcia klienta */
+    focus?: { x: number; y: number };
 }
 
 /**
@@ -28,6 +30,7 @@ export default function CanvasOverlay({
     size,
     containerRef,
     scaleFactor = 1,
+    focus,
 }: CanvasOverlayProps) {
     const { widthPx: baseWidth, heightPx: baseHeight } = getOverlayDimensions(
         size.widthCm,
@@ -104,6 +107,7 @@ export default function CanvasOverlay({
                             className="object-cover"
                             style={{
                                 filter: "contrast(1.05)",
+                                objectPosition: focus ? `${focus.x * 100}% ${focus.y * 100}%` : undefined,
                             }}
                             draggable={false}
                             priority

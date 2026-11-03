@@ -17,7 +17,7 @@
     id="wallify-ar-frame"
     src="{{ section.settings.wallify_url }}/ar/{{ product.handle }}"
     style="width: 100%; height: {{ section.settings.height }}px; border: none; display: block;"
-    allow="camera"
+    allow="camera; web-share"
     loading="lazy"
     title="Podgląd AR — {{ product.title }}"
   ></iframe>
@@ -68,8 +68,35 @@ Lub prościej: w **Edytorze motywu** przeciągnij sekcję "Wallify AR Viewer" na
 ---
 
 > [!IMPORTANT]
-> Atrybut `allow="camera"` w `<iframe>` jest **obowiązkowy**.
-> Bez niego przeglądarka zablokuje dostęp do kamery wewnątrz iframe.
+> Atrybut `allow="camera; web-share"` w `<iframe>` jest **obowiązkowy**.
+> Bez `camera` przeglądarka zablokuje kamerę w iframe, a bez `web-share` przycisk
+> „Zapisz / wyślij" w trybie ze zdjęcia zamiast menu „Udostępnij" tylko pobierze plik.
+
+---
+
+## Tryb „Ze zdjęcia" (bez kamery)
+
+Na ekranie startowym widżetu są dwa przyciski: **Przymierz na ścianie** (kamera na żywo)
+i **Użyj zdjęcia ściany**. Na komputerze głównym przyciskiem jest zdjęcie.
+
+Jeśli chcesz osobny przycisk na stronie produktu, który od razu otwiera tryb ze zdjęcia,
+dodaj do adresu `?tryb=zdjecie`:
+
+```liquid
+src="{{ section.settings.wallify_url }}/ar/{{ product.handle }}?tryb=zdjecie"
+```
+
+Jak to działa dla klienta:
+1. Wgrywa zdjęcie ściany (z galerii albo robi je od razu).
+2. Ustawia skalę: przeciąga końce miarki do krawędzi drzwi, kartki A4 albo innego przedmiotu i wpisuje wymiar.
+3. Przesuwa obraz, wybiera rozmiar i materiał, opcjonalnie dopasowuje perspektywę.
+4. Zapisuje/wysyła zdjęcie albo dodaje wybrany wariant do koszyka.
+
+Zdjęcie jest przetwarzane tylko w przeglądarce klienta. Wysyłane jest wyłącznie po kliknięciu
+„Ulepsz AI" i potwierdzeniu (patrz `VERCEL_DEPLOYMENT.md`).
+
+W zamówieniu w panelu Shopify każda pozycja dodana z Wallify ma ukrytą właściwość
+`_Wallify` z wartością „na żywo" albo „ze zdjęcia" — widać, który podgląd sprzedaje.
 
 ---
 

@@ -53,13 +53,13 @@ export function useCamera() {
                 domError.name === "PermissionDeniedError"
             ) {
                 setStatus("denied");
-                setError("Camera access was denied. Please allow camera access in your browser settings.");
+                setError("Brak zgody na dostęp do kamery. Zezwól na nią w ustawieniach przeglądarki.");
             } else if (domError.name === "NotFoundError") {
                 setStatus("error");
-                setError("No camera found on this device.");
+                setError("Nie znaleziono kamery w tym urządzeniu.");
             } else {
                 setStatus("error");
-                setError("An unexpected error occurred while accessing the camera.");
+                setError("Nie udało się uruchomić kamery. Spróbuj ponownie.");
             }
         }
     }, []);

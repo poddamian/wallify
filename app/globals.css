@@ -27,3 +27,12 @@ body {
 .top-safe-top {
   top: env(safe-area-inset-top, 0px);
 }
+
+/* Poziomo przewijane rzędy kapsułek bez widocznego paska przewijania */
+.no-scrollbar {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

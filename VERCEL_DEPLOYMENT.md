@@ -30,11 +30,29 @@ Zanim klikniesz "Deploy", musisz rozwinąć sekcję **Environment Variables** i 
     Kliknij **Add**.
 
 2.  **Name:** `NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN`
-    **Value:** (Twój token z kanału Headless, np. `shpat_123456789...`)
+    **Value:** publiczny token Storefront API z kanału Headless (*Public access token*).
+    Ten token trafia do przeglądarki klienta, więc **nie może** to być token prywatny
+    ani token Admin API.
     Kliknij **Add**.
 
+3.  *(opcjonalnie — ulepszenie AI w trybie ze zdjęcia)*
+    **Name:** `GEMINI_API_KEY` — klucz z Google AI Studio.
+    Bez tej zmiennej przycisk „Ulepsz AI" się nie pokazuje, a reszta działa normalnie.
+    Klucz powinien być na płatnym planie: na darmowym Google może używać przesłanych
+    zdjęć do ulepszania swoich modeli. Koszt to ok. 0,07 USD za jedno ulepszenie.
+    Dodatkowo możesz ustawić:
+    - `GEMINI_IMAGE_MODEL` — model (domyślnie `gemini-3.1-flash-image`),
+    - `AI_LIMIT_PER_HOUR` — limit ulepszeń na jeden adres IP na godzinę (domyślnie 8).
+
+4.  *(opcjonalnie — obraz z własnego zdjęcia klienta, zapis w Shopify Files)*
+    `SHOPIFY_ADMIN_URL`, `SHOPIFY_ADMIN_CLIENT_ID`, `SHOPIFY_ADMIN_CLIENT_SECRET` —
+    jak je zdobyć, opisuje `PERSONALIZACJA.md`.
+
 ### Krok 4: Deploy
-Kliknij przycisk **Deploy**. Vercel zbuduje projekt (zajmie to 1-2 minuty). Po pomyślnym zbudowaniu otrzymasz publiczny adres URL np. `wallify-costam.vercel.app`.
+Kliknij przycisk **Deploy**.
+
+> Każda gałąź i pull request na GitHubie dostaje w Vercel własny adres podglądu (*Preview*).
+> Nowe funkcje możesz przetestować na telefonie, zanim trafią na produkcję. Vercel zbuduje projekt (zajmie to 1-2 minuty). Po pomyślnym zbudowaniu otrzymasz publiczny adres URL np. `wallify-costam.vercel.app`.
 
 ### Krok 5: Aktualizacja kodu osadzenia (Shopify)
 Otwórz plik `SHOPIFY_EMBED.md`, który stworzyliśmy wcześniej, i zamień tam linię:
