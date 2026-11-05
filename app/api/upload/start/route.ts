@@ -7,7 +7,7 @@
  */
 
 import { checkOrigin, clientIp, json, rateLimited, text } from "@/lib/api-guard";
-import { createStagedUpload, isAdminConfigured, signResourceUrl } from "@/lib/shopify-admin";
+import { createStagedUpload, errorCode, isAdminConfigured, signResourceUrl } from "@/lib/shopify-admin";
 import { MAX_UPLOAD_BYTES, UPLOAD_MIME_TYPES, wallifyFilename } from "@/lib/upload-shared";
 
 export const runtime = "nodejs";
@@ -37,6 +37,6 @@ export async function POST(req: Request) {
         return json({ filename, target, ticket: signResourceUrl(target.resourceUrl) });
     } catch (err) {
         console.error("[Wallify upload/start]", err);
-        return text(502, "Nie udało się przygotować wysyłki zdjęcia.");
+        return json({ error: "Nie udało się przygotować wysyłki zdjęcia.", code: errorCode(err) }, 502);
     }
 }

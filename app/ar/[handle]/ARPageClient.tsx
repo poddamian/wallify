@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import ARViewer from "@/components/ARViewer";
 import { createCart, addToCart } from "@/lib/shopify";
 import CheckoutReady from "@/components/personalization/CheckoutReady";
-import { uploadCustomerPhoto, type UploadedPhoto } from "@/lib/upload-client";
+import { UploadError, uploadCustomerPhoto, type UploadedPhoto } from "@/lib/upload-client";
 import type { Personalization, Product, ProductVariant, ViewerMode } from "@/types";
 
 const CART_ID_KEY = "wallify_cart_id";
@@ -69,7 +69,7 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
     const [cartStatus, setCartStatus] = useState<string | null>(null);
     /** Po wysyłce zdjęcia klient sam klika „Przejdź do kasy" — przeglądarki blokują
      *  automatyczne przejście z ramki iframe, gdy od kliknięcia minęło za dużo czasu */
-    const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+    const [checkout, setCheckout] = useState<{ url: string; photoFailed: boolean } | null>(null);
 
     const handleAddToCart = useCallback(
         async (variant: ProductVariant, mode: ViewerMode, personalization?: Personalization) => {
@@ -80,12 +80,24 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
 
             setIsAddingToCart(true);
             try {
+                let photoFailed = false;
                 if (personalization && uploadsEnabled) {
                     setCartStatus("Wysyłanie zdjęcia… 0%");
-                    const uploaded = await uploadCustomerPhoto(personalization.file, (f) =>
-                        setCartStatus(f === null ? "Wysyłanie zdjęcia…" : `Wysyłanie zdjęcia… ${Math.round(f * 100)}%`)
-                    );
-                    attributes.push(...personalizationAttributes(personalization, uploaded));
+                    try {
+                        const uploaded = await uploadCustomerPhoto(personalization.file, (f) =>
+                            setCartStatus(f === null ? "Wysyłanie zdjęcia…" : `Wysyłanie zdjęcia… ${Math.round(f * 100)}%`)
+                        );
+                        attributes.push(...personalizationAttributes(personalization, uploaded));
+                    } catch (err) {
+                        // Nieudana wysyłka nie może blokować zakupu — klient prześle zdjęcie mailem,
+                        // a w zamówieniu zostaje kod błędu (szczegóły: /api/upload/status)
+                        console.error("[Wallify] Wysyłka zdjęcia nie powiodła się:", err);
+                        photoFailed = true;
+                        attributes.push(
+                            { key: "Personalizacja", value: "zdjęcie prześlę mailem" },
+                            { key: "_Błąd wysyłki zdjęcia", value: err instanceof UploadError ? err.code : "nieznany" }
+                        );
+                    }
                 } else if (personalization) {
                     // Wysyłka do Shopify nieskonfigurowana — zostaje dotychczasowa droga mailowa
                     attributes.push({ key: "Personalizacja", value: "zdjęcie prześlę mailem" });
@@ -95,7 +107,7 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
                 const url = await addLine(variant.id, attributes);
 
                 if (personalization && uploadsEnabled) {
-                    setCheckoutUrl(url);
+                    setCheckout({ url, photoFailed });
                 } else {
                     // Przekieruj do kasy Shopify — window.top, aby wyjść z ramki iframe
                     (window.top || window).location.href = url;
@@ -103,11 +115,7 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
             } catch (err) {
                 console.error("[Wallify] Błąd dodawania do koszyka:", err);
                 saveCartId(null);
-                alert(
-                    personalization
-                        ? "Nie udało się wysłać zdjęcia lub dodać go do koszyka. Sprawdź połączenie i spróbuj ponownie."
-                        : "Wystąpił błąd podczas dodawania do koszyka. Spróbuj ponownie."
-                );
+                alert("Nie udało się dodać do koszyka. Sprawdź połączenie i spróbuj ponownie.");
             } finally {
                 setIsAddingToCart(false);
                 setCartStatus(null);
@@ -126,7 +134,9 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
                 initialMode={initialMode}
                 aiEnabled={aiEnabled}
             />
-            {checkoutUrl && <CheckoutReady url={checkoutUrl} onClose={() => setCheckoutUrl(null)} />}
+            {checkout && (
+                <CheckoutReady url={checkout.url} photoFailed={checkout.photoFailed} onClose={() => setCheckout(null)} />
+            )}
         </main>
     );
 }

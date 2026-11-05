@@ -53,9 +53,29 @@ Od 2026 r. nowe aplikacje tworzy się w **Dev Dashboard** Shopify:
    Token Admin API Wallify pobiera i odświeża sam (ważny 24 h).
 
 7. **Redeploy** w Vercel.
+8. Otwórz **https://wallify-lemon.vercel.app/api/upload/status** — strona powie, czy zapis
+   działa, a jeśli nie, co dokładnie poprawić (kod błędu + odpowiedź Shopify).
+
+`SHOPIFY_ADMIN_URL` może mieć postać `https://enjmaa-pw.myshopify.com`, `enjmaa-pw.myshopify.com`
+albo samo `enjmaa-pw`. Spacje i znaki nowej linii na końcu wartości są ignorowane.
+
+### Najczęstsze błędy na stronie statusu
+
+| Kod | Co zrobić |
+|---|---|
+| `shop_not_permitted` | Aplikacja jest w innej organizacji niż sklep. Logowanie Client ID + secret działa tylko, gdy aplikacja i sklep są w tej samej organizacji w Dev Dashboard. |
+| `invalid_client` | Zły Client ID / secret — skopiuj ponownie z Dev Dashboard → aplikacja → Ustawienia. |
+| `brak_uprawnien`, `brak_write_files` | Dodaj zakresy `write_files` i `read_files` w wersji aplikacji, wydaj ją i zatwierdź w sklepie. |
+| `zly_adres_sklepu` | `SHOPIFY_ADMIN_URL` musi być adresem `*.myshopify.com`, nie `artavia.pl`. |
+| `brak_konfiguracji` | Zmienne nie są ustawione dla środowiska Production albo nie było Redeploy. |
 
 Bez tych zmiennych personalizacja też działa, ale zdjęcie nie jest wysyłane — w koszyku
 pojawia się „Personalizacja: zdjęcie prześlę mailem" (dotychczasowa droga).
+
+**Gdy wysyłka się nie uda** (np. zła konfiguracja albo awaria Shopify), zakup nie jest blokowany:
+obraz trafia do koszyka z „Personalizacja: zdjęcie prześlę mailem", klient widzi prośbę o wysłanie
+zdjęcia na info@artavia.pl (adres można zmienić zmienną `NEXT_PUBLIC_CONTACT_EMAIL`),
+a w zamówieniu jest ukryta właściwość `_Błąd wysyłki zdjęcia` z kodem błędu.
 
 ## Po wdrożeniu
 

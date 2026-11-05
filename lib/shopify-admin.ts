@@ -7,55 +7,103 @@
  *    — token pobierany automatycznie (client credentials) i odświeżany co ok. 24 h.
  * 2) Stała aplikacja (starszy typ, utworzona w panelu przed 2026): SHOPIFY_ADMIN_ACCESS_TOKEN.
  *
- * Adres sklepu: SHOPIFY_ADMIN_URL (np. https://twojsklep.myshopify.com), a gdy go brak —
- * https:// + NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN.
+ * Adres sklepu: SHOPIFY_ADMIN_URL (np. https://twojsklep.myshopify.com, sama nazwa „twojsklep"
+ * też działa), a gdy go brak — NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN.
+ *
+ * Diagnoza konfiguracji: GET /api/upload/status
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const API_VERSION = "2026-07";
 
+/**
+ * Błąd Admin API z krótkim kodem (bez sekretów) — trafia do logów, do strony
+ * /api/upload/status i do zamówienia, gdy wysyłka zdjęcia się nie uda.
+ */
+export class AdminError extends Error {
+    constructor(public code: string, message: string) {
+        super(message);
+        this.name = "AdminError";
+    }
+}
+
+/** Zmienna środowiskowa bez spacji i znaków nowej linii (częsty efekt wklejania w Vercel) */
+function env(name: string): string | undefined {
+    const value = process.env[name]?.trim();
+    return value ? value : undefined;
+}
+
+/**
+ * Adres sklepu do Admin API: zawsze https://<sklep>.myshopify.com.
+ * Przyjmuje też „enjmaa-pw", „enjmaa-pw.myshopify.com" i „admin.shopify.com/store/enjmaa-pw".
+ */
 export function adminBaseUrl(): string {
-    const explicit = process.env.SHOPIFY_ADMIN_URL?.replace(/\/+$/, "");
-    if (explicit) return explicit;
-    const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
-    if (!domain) throw new Error("Brak SHOPIFY_ADMIN_URL i NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN");
-    return `https://${domain.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
+    const raw = env("SHOPIFY_ADMIN_URL") ?? env("NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN");
+    if (!raw) throw new AdminError("brak_adresu_sklepu", "Brak SHOPIFY_ADMIN_URL");
+
+    const withoutProtocol = raw.replace(/^https?:\/\//i, "");
+    const adminPath = withoutProtocol.match(/^admin\.shopify\.com\/store\/([a-z0-9-]+)/i);
+    let host = adminPath ? `${adminPath[1]}.myshopify.com` : withoutProtocol.split("/")[0];
+    if (!host.includes(".")) host = `${host}.myshopify.com`;
+    return `https://${host.toLowerCase()}`;
 }
 
 export function isAdminConfigured(): boolean {
     return Boolean(
-        process.env.SHOPIFY_ADMIN_ACCESS_TOKEN ||
-        (process.env.SHOPIFY_ADMIN_CLIENT_ID && process.env.SHOPIFY_ADMIN_CLIENT_SECRET)
+        env("SHOPIFY_ADMIN_ACCESS_TOKEN") || (env("SHOPIFY_ADMIN_CLIENT_ID") && env("SHOPIFY_ADMIN_CLIENT_SECRET"))
     );
 }
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 async function getAccessToken(): Promise<string> {
-    const staticToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+    const staticToken = env("SHOPIFY_ADMIN_ACCESS_TOKEN");
     if (staticToken) return staticToken;
 
     if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60_000) return cachedToken.value;
 
-    const clientId = process.env.SHOPIFY_ADMIN_CLIENT_ID;
-    const clientSecret = process.env.SHOPIFY_ADMIN_CLIENT_SECRET;
-    if (!clientId || !clientSecret) throw new Error("Brak danych dostępu do Admin API");
+    const clientId = env("SHOPIFY_ADMIN_CLIENT_ID");
+    const clientSecret = env("SHOPIFY_ADMIN_CLIENT_SECRET");
+    if (!clientId || !clientSecret) throw new AdminError("brak_konfiguracji", "Brak danych dostępu do Admin API");
 
-    const res = await fetch(`${adminBaseUrl()}/admin/oauth/access_token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-            grant_type: "client_credentials",
-            client_id: clientId,
-            client_secret: clientSecret,
-        }),
-        cache: "no-store",
-    });
-    if (!res.ok) {
-        throw new Error(`Nie udało się pobrać tokenu Admin API: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    const base = adminBaseUrl();
+    if (!base.endsWith(".myshopify.com")) {
+        throw new AdminError("zly_adres_sklepu", `Adres ${base} nie jest adresem *.myshopify.com`);
     }
-    const json = (await res.json()) as { access_token: string; expires_in?: number };
+
+    let res: Response;
+    try {
+        res = await fetch(`${base}/admin/oauth/access_token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+            body: new URLSearchParams({
+                grant_type: "client_credentials",
+                client_id: clientId,
+                client_secret: clientSecret,
+            }),
+            cache: "no-store",
+            redirect: "manual",
+        });
+    } catch (err) {
+        throw new AdminError("zly_adres_sklepu", `Nie można połączyć się z ${base}: ${String(err)}`);
+    }
+
+    const body = await res.text();
+    if (!res.ok) {
+        // Shopify zwraca np. {"error":"shop_not_permitted","error_description":"..."}
+        let code = `token_http_${res.status}`;
+        try {
+            const parsed = JSON.parse(body) as { error?: string; errors?: string };
+            if (parsed.error) code = parsed.error;
+            else if (typeof parsed.errors === "string") code = parsed.errors;
+        } catch {
+            /* odpowiedź nie jest JSON-em */
+        }
+        throw new AdminError(code, `Token Admin API: HTTP ${res.status} ${body.slice(0, 300)}`);
+    }
+
+    const json = JSON.parse(body) as { access_token: string; expires_in?: number };
     cachedToken = {
         value: json.access_token,
         expiresAt: Date.now() + (json.expires_in ?? 86_399) * 1000,
@@ -81,12 +129,87 @@ export async function adminGraphql<T>(query: string, variables: Record<string, u
         cachedToken = null;
         res = await send();
     }
-    if (!res.ok) throw new Error(`Admin API HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+        const code = res.status === 401 ? "zly_token" : res.status === 403 ? "brak_uprawnien" : `admin_http_${res.status}`;
+        throw new AdminError(code, `Admin API HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    }
 
-    const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
-    if (json.errors?.length) throw new Error(`Admin API: ${json.errors.map((e) => e.message).join(", ")}`);
-    if (!json.data) throw new Error("Admin API: pusta odpowiedź");
+    const json = (await res.json()) as { data?: T; errors?: { message: string; extensions?: { code?: string } }[] };
+    if (json.errors?.length) {
+        const denied = json.errors.some((e) => /access denied/i.test(e.message) || e.extensions?.code === "ACCESS_DENIED");
+        throw new AdminError(
+            denied ? "brak_uprawnien" : "admin_graphql",
+            `Admin API: ${json.errors.map((e) => e.message).join(", ")}`
+        );
+    }
+    if (!json.data) throw new AdminError("admin_graphql", "Admin API: pusta odpowiedź");
     return json.data;
+}
+
+/** Kod błędu do pokazania / zapisania (bez szczegółów, które mogłyby coś ujawnić) */
+export function errorCode(err: unknown): string {
+    return err instanceof AdminError ? err.code : "nieznany";
+}
+
+// ─── Diagnostyka (strona /api/upload/status) ─────────────────────────────────
+
+export type AdminDiagnosis = {
+    ok: boolean;
+    store: string | null;
+    method: "token" | "client_credentials" | null;
+    shopName?: string;
+    scopes?: string[];
+    code?: string;
+    detail?: string;
+};
+
+const DIAGNOSE = `
+  query WallifyDiagnose {
+    shop {
+      name
+      myshopifyDomain
+    }
+    currentAppInstallation {
+      accessScopes {
+        handle
+      }
+    }
+  }
+`;
+
+export async function diagnoseAdmin(): Promise<AdminDiagnosis> {
+    let store: string | null = null;
+    try {
+        store = new URL(adminBaseUrl()).hostname;
+    } catch {
+        /* zgłosimy niżej */
+    }
+    const method = env("SHOPIFY_ADMIN_ACCESS_TOKEN")
+        ? "token"
+        : env("SHOPIFY_ADMIN_CLIENT_ID") && env("SHOPIFY_ADMIN_CLIENT_SECRET")
+            ? "client_credentials"
+            : null;
+    if (!method) return { ok: false, store, method, code: "brak_konfiguracji" };
+
+    try {
+        cachedToken = null; // zawsze świeży test
+        const data = await adminGraphql<{
+            shop: { name: string; myshopifyDomain: string };
+            currentAppInstallation: { accessScopes: { handle: string }[] };
+        }>(DIAGNOSE);
+        const scopes = data.currentAppInstallation.accessScopes.map((s) => s.handle);
+        const canWrite = scopes.includes("write_files");
+        return {
+            ok: canWrite,
+            store,
+            method,
+            shopName: data.shop.name,
+            scopes,
+            code: canWrite ? undefined : "brak_write_files",
+        };
+    } catch (err) {
+        return { ok: false, store, method, code: errorCode(err), detail: err instanceof Error ? err.message : String(err) };
+    }
 }
 
 // ─── Shopify Files ───────────────────────────────────────────────────────────
@@ -138,8 +261,8 @@ export async function createStagedUpload(file: {
         ],
     });
     const { stagedTargets, userErrors } = data.stagedUploadsCreate;
-    if (userErrors.length) throw new Error(userErrors.map((e) => e.message).join(", "));
-    if (!stagedTargets[0]) throw new Error("Brak celu wysyłki");
+    if (userErrors.length) throw new AdminError("staged_upload", userErrors.map((e) => e.message).join(", "));
+    if (!stagedTargets[0]) throw new AdminError("staged_upload", "Brak celu wysyłki");
     return stagedTargets[0];
 }
 
@@ -149,7 +272,9 @@ export async function uploadToStagedTarget(target: StagedTarget, file: Blob, fil
     for (const p of target.parameters) form.append(p.name, p.value);
     form.append("file", file, filename);
     const res = await fetch(target.url, { method: "POST", body: form });
-    if (!res.ok) throw new Error(`Wysyłka do Shopify: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) {
+        throw new AdminError(`wysylka_http_${res.status}`, `Wysyłka do Shopify: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    }
 }
 
 const FILE_CREATE = `
@@ -219,22 +344,22 @@ export async function createFileFromStaged(resourceUrl: string, alt: string): Pr
         files: [{ originalSource: resourceUrl, contentType: "IMAGE", alt, duplicateResolutionMode: "APPEND_UUID" }],
     });
     const { files, userErrors } = data.fileCreate;
-    if (userErrors.length) throw new Error(userErrors.map((e) => e.message).join(", "));
+    if (userErrors.length) throw new AdminError("file_create", userErrors.map((e) => e.message).join(", "));
     const created = files[0];
-    if (!created) throw new Error("Shopify nie utworzył pliku");
+    if (!created) throw new AdminError("file_create", "Shopify nie utworzył pliku");
 
     let url = created.image?.url ?? null;
     for (let i = 0; !url && i < 12; i++) {
         await new Promise((r) => setTimeout(r, 1500));
         const status = await adminGraphql<{ node: MediaImageResult | null }>(FILE_STATUS, { id: created.id });
         if (status.node?.fileStatus === "FAILED") {
-            throw new Error(`Shopify odrzucił plik: ${status.node.fileErrors?.map((e) => e.message).join(", ")}`);
+            throw new AdminError("plik_odrzucony", `Shopify odrzucił plik: ${status.node.fileErrors?.map((e) => e.message).join(", ")}`);
         }
         url = status.node?.image?.url ?? null;
     }
 
     // Bez gotowego adresu nie mamy pewności, że plik w ogóle dotarł — klient spróbuje drugą drogą
-    if (!url) throw new Error("Shopify nie przetworzył pliku na czas");
+    if (!url) throw new AdminError("plik_nieprzetworzony", "Shopify nie przetworzył pliku na czas");
 
     const numericId = created.id.split("/").pop();
     const storeHandle = new URL(adminBaseUrl()).hostname.replace(/\.myshopify\.com$/, "");
@@ -250,7 +375,7 @@ export async function createFileFromStaged(resourceUrl: string, alt: string): Pr
 // Dzięki temu nikt nie może kazać sklepowi zaimportować dowolnego obrazu z internetu.
 
 function ticketKey(): string {
-    const key = process.env.SHOPIFY_ADMIN_CLIENT_SECRET || process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+    const key = env("SHOPIFY_ADMIN_CLIENT_SECRET") || env("SHOPIFY_ADMIN_ACCESS_TOKEN");
     if (!key) throw new Error("Brak klucza do podpisu");
     return key;
 }

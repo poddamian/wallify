@@ -8,7 +8,7 @@
  */
 
 import { checkOrigin, clientIp, json, rateLimited, text } from "@/lib/api-guard";
-import { createFileFromStaged, isAdminConfigured, verifyResourceUrl } from "@/lib/shopify-admin";
+import { createFileFromStaged, errorCode, isAdminConfigured, verifyResourceUrl } from "@/lib/shopify-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -36,6 +36,6 @@ export async function POST(req: Request) {
         return json(file);
     } catch (err) {
         console.error("[Wallify upload/finish]", err);
-        return text(502, "Sklep nie przyjął zdjęcia.");
+        return json({ error: "Sklep nie przyjął zdjęcia.", code: errorCode(err) }, 502);
     }
 }
