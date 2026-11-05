@@ -113,3 +113,23 @@ Live widok z kamery + nakładka produktu w wybranym rozmiarze
            ↓
 Klient klika „Dodaj do koszyka" → przekierowanie do checkout Shopify
 ```
+
+
+---
+
+## Koszyk sklepu (mostek Wallify → koszyk)
+
+Wallify działa na innej domenie niż sklep, więc sam nie widzi koszyka artavia.pl.
+Żeby „Dodaj do koszyka" w Wallify dodawało produkt do **zwykłego koszyka sklepu**
+(z licznikiem w ikonce koszyka), wgraj do motywu plik:
+
+- `shopify/snippets/wallify-bridge.liquid` → w edytorze kodu motywu folder **snippets**
+  (Dodaj nowy snippet → nazwa `wallify-bridge`, wklej zawartość)
+
+i w sekcji „Niestandardowy Liquid" pod ramką Wallify dopisz jedną linię:
+
+```liquid
+{% render 'wallify-bridge' %}
+```
+
+Bez tego Wallify używa zapasowego, osobnego koszyka — działa tylko przycisk „Przejdź do kasy".

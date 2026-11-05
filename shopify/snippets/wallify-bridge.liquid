@@ -1,0 +1,69 @@
+{%- comment -%}
+  Wallify → koszyk sklepu.
+  Ramka Wallify (wallify-lemon.vercel.app) prosi tę stronę o dodanie produktu do koszyka sklepu,
+  bo sama — jako inna domena — nie ma do niego dostępu. Wstaw w sekcji „Niestandardowy Liquid"
+  pod ramką: {% render 'wallify-bridge' %}
+{%- endcomment -%}
+<script>
+  (function () {
+    if (window.__wallifyBridge) return;
+    window.__wallifyBridge = true;
+    var WALLIFY = 'https://wallify-lemon.vercel.app';
+
+    function frames() {
+      return Array.prototype.slice.call(document.querySelectorAll('iframe[src^="' + WALLIFY + '"]'));
+    }
+    function sayReady(win) {
+      try { win.postMessage({ type: 'wallify:ready' }, WALLIFY); } catch (e) {}
+    }
+    frames().forEach(function (f) {
+      f.addEventListener('load', function () { sayReady(f.contentWindow); });
+    });
+
+    function refreshCartIcon(sections) {
+      var html = sections && sections['cart-icon-bubble'];
+      var bubble = document.getElementById('cart-icon-bubble');
+      if (!html || !bubble) return;
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var section = doc.querySelector('.shopify-section');
+      bubble.innerHTML = section ? section.innerHTML : doc.body.innerHTML;
+    }
+
+    window.addEventListener('message', function (e) {
+      if (e.origin !== WALLIFY || !e.data) return;
+      var d = e.data;
+      if (d.type === 'wallify:hello') return sayReady(e.source);
+      if (d.type !== 'wallify:add') return;
+
+      function reply(msg) {
+        msg.type = 'wallify:added';
+        msg.requestId = d.requestId;
+        e.source.postMessage(msg, WALLIFY);
+      }
+
+      fetch((window.Shopify && Shopify.routes ? Shopify.routes.root : '/') + 'cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          items: [{ id: d.variantId, quantity: d.quantity || 1, properties: d.properties || {} }],
+          sections: 'cart-icon-bubble',
+          sections_url: window.location.pathname
+        })
+      })
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error(j.description || j.message || 'HTTP ' + r.status);
+            return j;
+          });
+        })
+        .then(function (j) {
+          try { refreshCartIcon(j.sections); } catch (err) {}
+          document.dispatchEvent(new CustomEvent('wallify:cart-updated', { detail: j }));
+          reply({ ok: true });
+        })
+        .catch(function (err) {
+          reply({ ok: false, error: String((err && err.message) || err) });
+        });
+    });
+  })();
+</script>
