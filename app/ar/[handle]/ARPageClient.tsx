@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import ARViewer from "@/components/ARViewer";
 import { createCart, addToCart } from "@/lib/shopify";
 import CheckoutReady from "@/components/personalization/CheckoutReady";
+import { addToShopCart } from "@/lib/cart-bridge";
 import { UploadError, uploadCustomerPhoto, type UploadedPhoto } from "@/lib/upload-client";
 import type { Personalization, Product, ProductVariant, ViewerMode } from "@/types";
 
@@ -69,7 +70,12 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
     const [cartStatus, setCartStatus] = useState<string | null>(null);
     /** Po wysyłce zdjęcia klient sam klika „Przejdź do kasy" — przeglądarki blokują
      *  automatyczne przejście z ramki iframe, gdy od kliknięcia minęło za dużo czasu */
-    const [checkout, setCheckout] = useState<{ url: string; photoFailed: boolean } | null>(null);
+    const [checkout, setCheckout] = useState<{
+        url: string;
+        photoFailed: boolean;
+        personalized: boolean;
+        inShopCart: boolean;
+    } | null>(null);
 
     const handleAddToCart = useCallback(
         async (variant: ProductVariant, mode: ViewerMode, personalization?: Personalization) => {
@@ -104,10 +110,24 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
                 }
 
                 setCartStatus("Dodawanie do koszyka…");
+
+                // 1) Prawdziwy koszyk sklepu (przez stronę sklepu) — produkt widać w ikonce koszyka
+                const shop = await addToShopCart(variant.id, attributes);
+                if (shop) {
+                    setCheckout({
+                        url: `${shop.shopOrigin}/checkout`,
+                        photoFailed,
+                        personalized: Boolean(personalization),
+                        inShopCart: true,
+                    });
+                    return;
+                }
+
+                // 2) Zapasowo: osobny koszyk Storefront API (gdy w sklepie nie ma skryptu mostka)
                 const url = await addLine(variant.id, attributes);
 
                 if (personalization && uploadsEnabled) {
-                    setCheckout({ url, photoFailed });
+                    setCheckout({ url, photoFailed, personalized: true, inShopCart: false });
                 } else {
                     // Przekieruj do kasy Shopify — window.top, aby wyjść z ramki iframe
                     (window.top || window).location.href = url;
@@ -135,7 +155,13 @@ export default function ARPageClient({ product, initialMode, aiEnabled, uploadsE
                 aiEnabled={aiEnabled}
             />
             {checkout && (
-                <CheckoutReady url={checkout.url} photoFailed={checkout.photoFailed} onClose={() => setCheckout(null)} />
+                <CheckoutReady
+                    url={checkout.url}
+                    photoFailed={checkout.photoFailed}
+                    personalized={checkout.personalized}
+                    inShopCart={checkout.inShopCart}
+                    onClose={() => setCheckout(null)}
+                />
             )}
         </main>
     );

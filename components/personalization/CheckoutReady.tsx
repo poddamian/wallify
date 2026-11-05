@@ -9,13 +9,23 @@ interface CheckoutReadyProps {
     onClose: () => void;
     /** Zdjęcie nie dotarło do sklepu — produkt jest w koszyku, klient wyśle zdjęcie mailem */
     photoFailed?: boolean;
+    /** Obraz z własnego zdjęcia klienta */
+    personalized?: boolean;
+    /** Produkt trafił do koszyka sklepu (widać go w ikonce) — można spokojnie kontynuować zakupy */
+    inShopCart?: boolean;
 }
 
 /**
  * Potwierdzenie po dodaniu personalizowanego obrazu: klient sam przechodzi do kasy (link target="_top"),
  * bo po dłuższej wysyłce przeglądarka mogłaby zablokować automatyczne przejście z ramki.
  */
-export default function CheckoutReady({ url, onClose, photoFailed = false }: CheckoutReadyProps) {
+export default function CheckoutReady({
+    url,
+    onClose,
+    photoFailed = false,
+    personalized = true,
+    inShopCart = false,
+}: CheckoutReadyProps) {
     return (
         <motion.div
             className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
@@ -38,7 +48,7 @@ export default function CheckoutReady({ url, onClose, photoFailed = false }: Che
                 )}
                 <div className="space-y-1">
                     <p className="text-lg font-bold text-white">
-                        {photoFailed ? "Obraz jest w koszyku" : "Gotowe — zdjęcie jest w koszyku"}
+                        {photoFailed || !personalized ? "Obraz jest w koszyku" : "Gotowe — zdjęcie jest w koszyku"}
                     </p>
                     {photoFailed ? (
                         <p className="text-sm text-white/70">
@@ -48,11 +58,11 @@ export default function CheckoutReady({ url, onClose, photoFailed = false }: Che
                             </a>{" "}
                             i podaj numer zamówienia.
                         </p>
-                    ) : (
+                    ) : personalized ? (
                         <p className="text-sm text-white/60">
                             Nie musisz niczego wysyłać mailem — dołączymy je do zamówienia.
                         </p>
-                    )}
+                    ) : null}
                 </div>
                 <a
                     href={url}
@@ -62,7 +72,7 @@ export default function CheckoutReady({ url, onClose, photoFailed = false }: Che
                     Przejdź do kasy <ArrowRight className="w-5 h-5" />
                 </a>
                 <button type="button" onClick={onClose} className="text-sm text-white/50 hover:text-white">
-                    Zostań tutaj
+                    {inShopCart ? "Kontynuuj zakupy" : "Zostań tutaj"}
                 </button>
             </motion.div>
         </motion.div>
