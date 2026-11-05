@@ -9,7 +9,7 @@
  */
 
 import { checkOrigin, clientIp, json, rateLimited, text } from "@/lib/api-guard";
-import { createStagedUpload, isAdminConfigured, signResourceUrl, uploadToStagedTarget } from "@/lib/shopify-admin";
+import { createStagedUpload, errorCode, isAdminConfigured, signResourceUrl, uploadToStagedTarget } from "@/lib/shopify-admin";
 import { MAX_PROXY_BYTES, UPLOAD_MIME_TYPES, wallifyFilename } from "@/lib/upload-shared";
 
 export const runtime = "nodejs";
@@ -34,6 +34,6 @@ export async function POST(req: Request) {
         return json({ resourceUrl: target.resourceUrl, ticket: signResourceUrl(target.resourceUrl) });
     } catch (err) {
         console.error("[Wallify upload/proxy]", err);
-        return text(502, "Nie udało się wysłać zdjęcia do sklepu.");
+        return json({ error: "Nie udało się wysłać zdjęcia do sklepu.", code: errorCode(err) }, 502);
     }
 }
