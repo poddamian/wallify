@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getProduct } from "@/lib/shopify";
+import { loadProduct } from "@/lib/load-product";
 import { isAdminConfigured } from "@/lib/shopify-admin";
 import ARPageClient from "./ARPageClient";
 
@@ -11,7 +11,7 @@ interface ARPageProps {
 export default async function ARPage({ params, searchParams }: ARPageProps) {
     const { handle } = await params;
     const { tryb } = await searchParams;
-    const product = await getProduct(handle);
+    const product = await loadProduct(handle);
 
     if (!product) {
         notFound();
@@ -33,7 +33,7 @@ export default async function ARPage({ params, searchParams }: ARPageProps) {
 // Metadane SEO na podstawie produktu (opcjonalnie)
 export async function generateMetadata({ params }: ARPageProps) {
     const { handle } = await params;
-    const product = await getProduct(handle);
+    const product = await loadProduct(handle);
     return {
         title: product ? `${product.title} — Podgląd AR | Wallify` : "Wallify AR",
     };

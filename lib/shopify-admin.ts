@@ -389,3 +389,84 @@ export function verifyResourceUrl(resourceUrl: string, ticket: string): boolean 
     const given = Buffer.from(String(ticket), "hex");
     return given.length === expected.length && timingSafeEqual(given, expected);
 }
+
+// ─── Produkty (bez kanału Headless) ──────────────────────────────────────────
+
+const PRODUCT_QUERY = `
+  query WallifyProduct($handle: String!, $after: String) {
+    shop { currencyCode }
+    productByIdentifier(identifier: { handle: $handle }) {
+      id
+      title
+      status
+      tags
+      featuredMedia { preview { image { url } } }
+      variants(first: 250, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          title
+          availableForSale
+          price
+          selectedOptions { name value }
+        }
+      }
+    }
+  }
+`;
+
+type AdminProductData = {
+    shop: { currencyCode: string };
+    productByIdentifier: {
+        id: string;
+        title: string;
+        status: string;
+        tags: string[];
+        featuredMedia: { preview: { image: { url: string } | null } | null } | null;
+        variants: {
+            pageInfo: { hasNextPage: boolean; endCursor: string | null };
+            nodes: {
+                id: string;
+                title: string;
+                availableForSale: boolean;
+                price: string;
+                selectedOptions: { name: string; value: string }[];
+            }[];
+        };
+    } | null;
+};
+
+/**
+ * Produkt przez Admin API (wymaga zakresu read_products w aplikacji Wallify).
+ * Nie zależy od kanału sprzedaży Headless — widzi każdy aktywny produkt sklepu.
+ * Zwraca surowe dane w kształcie RawProduct (mapowanie robi lib/product.ts).
+ */
+export async function getAdminProduct(handle: string) {
+    const first = await adminGraphql<AdminProductData>(PRODUCT_QUERY, { handle });
+    const p = first.productByIdentifier;
+    if (!p || p.status !== "ACTIVE") return null;
+
+    const currencyCode = first.shop.currencyCode;
+    const nodes = [...p.variants.nodes];
+    let page = p.variants.pageInfo;
+    for (let i = 1; i < 8 && page.hasNextPage && page.endCursor; i++) {
+        const next = await adminGraphql<AdminProductData>(PRODUCT_QUERY, { handle, after: page.endCursor });
+        if (!next.productByIdentifier) break;
+        nodes.push(...next.productByIdentifier.variants.nodes);
+        page = next.productByIdentifier.variants.pageInfo;
+    }
+
+    return {
+        id: p.id,
+        title: p.title,
+        tags: p.tags,
+        imageUrl: p.featuredMedia?.preview?.image?.url ?? "/demo-canvas.jpg",
+        variants: nodes.map((v) => ({
+            id: v.id,
+            title: v.title,
+            availableForSale: v.availableForSale,
+            price: { amount: v.price, currencyCode },
+            selectedOptions: v.selectedOptions,
+        })),
+    };
+}

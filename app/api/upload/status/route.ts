@@ -73,6 +73,7 @@ ${row("Adres sklepu", d.store ?? "—")}
 ${row("Sposób logowania", method)}
 ${d.shopName ? row("Sklep", d.shopName) : ""}
 ${d.scopes ? row("Uprawnienia aplikacji", d.scopes.join(", ") || "—") : ""}
+${d.scopes ? row("Obrazy bez kanału Headless", d.scopes.includes("read_products") ? "✅ tak (read_products)" : "❌ nie — dodaj read_products w wersji aplikacji i zatwierdź w sklepie") : ""}
 </table>
 ${d.detail ? `<p style="margin-top:16px;color:#aaa">Odpowiedź Shopify:</p><pre>${esc(d.detail)}</pre>` : ""}
 <p style="color:#777;font-size:13px;margin-top:24px">Po zmianie zmiennych w Vercel zrób Redeploy i odśwież tę stronę.</p>
