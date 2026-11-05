@@ -39,7 +39,8 @@ Od 2026 r. nowe aplikacje tworzy się w **Dev Dashboard** Shopify:
 
 1. Wejdź na https://dev.shopify.com/dashboard (ta sama organizacja, do której należy sklep Artavia).
 2. **Utwórz aplikację** (np. „Wallify").
-3. W wersji aplikacji ustaw uprawnienia Admin API: **`write_files`** i **`read_files`**, wydaj wersję.
+3. W wersji aplikacji ustaw uprawnienia Admin API: **`write_files`**, **`read_files`** i **`read_products`**, wydaj wersję.
+   (`read_products` pozwala Wallify widzieć obrazy bez publikowania ich w kanale Headless.)
 4. **Zainstaluj** aplikację w sklepie Artavia.
 5. Z ustawień aplikacji skopiuj **Client ID** i **Client secret**.
 6. W Vercel → projekt Wallify → Settings → Environment Variables dodaj:
