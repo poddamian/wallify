@@ -24,7 +24,7 @@ export type RawProduct = {
 };
 
 /** Tagi produktu, które włączają wgrywanie własnego zdjęcia klienta */
-export const PERSONALIZED_TAGS = ["wallify-wlasne-zdjecie", "personalizowany obraz"];
+export const PERSONALIZED_TAGS = ["wallify-wlasne-zdjecie", "personalizowany obraz", "personalizowany"];
 
 const SIZE_OPTION_NAME = /rozmiar|size|wymiar|format/i;
 

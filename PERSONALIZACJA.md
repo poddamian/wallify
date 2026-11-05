@@ -6,8 +6,9 @@ Dla produktów personalizowanych klient **wgrywa swoje zdjęcie w Wallify**, ogl
 
 ## Które produkty?
 
-Produkt z tagiem **`personalizowany obraz`** (już ma go „Obraz Na Płótnie Ze Zdjęcia")
-albo **`wallify-wlasne-zdjecie`**. Wallify pobiera wszystkie warianty (np. 169 rozmiarów × 2 materiały).
+Produkt z tagiem **`personalizowany`**, **`personalizowany obraz`** albo **`wallify-wlasne-zdjecie`**.
+Produkt musi być też dostępny w kanale sprzedaży **Artavia Headless** — inaczej Wallify go nie widzi
+(ramka sama się wtedy chowa, jeśli w motywie jest `snippets/wallify-bridge.liquid`). Wallify pobiera wszystkie warianty (np. 169 rozmiarów × 2 materiały).
 
 ## Co widzi klient
 

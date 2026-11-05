@@ -33,6 +33,15 @@
       if (e.origin !== WALLIFY || !e.data) return;
       var d = e.data;
       if (d.type === 'wallify:hello') return sayReady(e.source);
+      if (d.type === 'wallify:unavailable') {
+        // Wallify nie zna tego produktu — chowamy całą ramkę zamiast pokazywać pusty podgląd
+        frames().forEach(function (f) {
+          if (f.contentWindow !== e.source) return;
+          var box = f.closest('.shopify-section') || f.closest('.wallify-ar-section') || f;
+          box.style.display = 'none';
+        });
+        return;
+      }
       if (d.type !== 'wallify:add') return;
 
       function reply(msg) {
