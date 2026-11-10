@@ -319,6 +319,8 @@ export type ComposeOptions = {
     light: LightFactors;
     /** Położenie kadru grafiki (0–1), domyślnie środek */
     focus?: { x: number; y: number };
+    /** Obraz okrągły — grafika i cień przycięte do koła */
+    round?: boolean;
     /** Podpis w rogu, np. "Kwiaty Magnolii · 100 × 70 cm" */
     caption?: string;
 };
@@ -328,7 +330,7 @@ export type ComposeOptions = {
  * i zwraca gotowy canvas — do zapisu, udostępnienia albo wysłania do ulepszenia AI.
  */
 export async function composeImage(opts: ComposeOptions): Promise<HTMLCanvasElement> {
-    const { photo, artwork, h, widthCm, heightCm, light, focus, caption } = opts;
+    const { photo, artwork, h, widthCm, heightCm, light, focus, caption, round } = opts;
     const photoImg = await loadImageElement(photo.url);
 
     const canvas = document.createElement("canvas");
@@ -351,9 +353,22 @@ export async function composeImage(opts: ComposeOptions): Promise<HTMLCanvasElem
     tctx.globalCompositeOperation = "multiply";
     tctx.fillStyle = lightToCss(light);
     tctx.fillRect(0, 0, texW, texH);
+    if (round) {
+        // Poza kołem tekstura przezroczysta — w perspektywie koło staje się elipsą
+        tctx.globalCompositeOperation = "destination-in";
+        tctx.beginPath();
+        tctx.ellipse(texW / 2, texH / 2, texW / 2, texH / 2, 0, 0, Math.PI * 2);
+        tctx.fill();
+    }
+    tctx.globalCompositeOperation = "source-over";
 
     // Cień pod obrazem (krosno ma ok. 2 cm głębokości, światło zwykle z góry)
-    const corners = rectCorners(widthCm, heightCm).map((p) => applyH(h, p));
+    const corners = round
+        ? Array.from({ length: 64 }, (_, i) => {
+              const t = (i / 64) * Math.PI * 2;
+              return applyH(h, { x: (Math.cos(t) * widthCm) / 2, y: (Math.sin(t) * heightCm) / 2 });
+          })
+        : rectCorners(widthCm, heightCm).map((p) => applyH(h, p));
     const unit = Math.hypot(applyH(h, { x: 1, y: 0 }).x - applyH(h, { x: 0, y: 0 }).x,
         applyH(h, { x: 1, y: 0 }).y - applyH(h, { x: 0, y: 0 }).y);
     ctx.save();

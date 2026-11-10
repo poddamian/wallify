@@ -108,6 +108,7 @@ export default function CropEditor({ artwork, size, onChange, onClose }: CropEdi
                                 width: crop.sw * scale,
                                 height: crop.sh * scale,
                                 boxShadow: "0 0 0 9999px rgba(0,0,0,0.62)",
+                                borderRadius: size.round ? "50%" : undefined,
                                 touchAction: "none",
                             }}
                         >
@@ -122,7 +123,11 @@ export default function CropEditor({ artwork, size, onChange, onClose }: CropEdi
             </div>
 
             <div className="shrink-0 px-6 pb-6 space-y-1 text-center">
-                <p className="text-sm text-white/70">Przesuń ramkę — to, co w niej, trafi na płótno.</p>
+                <p className="text-sm text-white/70">
+                    {size.round
+                        ? "Przesuń koło — to, co w nim, będzie z przodu obrazu. Brzeg zdjęcia wokół koła zawinie się na boki krosna."
+                        : "Przesuń ramkę — to, co w niej, trafi na płótno."}
+                </p>
                 <QualityNote quality={quality} />
             </div>
         </motion.div>

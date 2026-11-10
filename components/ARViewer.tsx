@@ -98,6 +98,7 @@ export default function ARViewer({
             original: { width: artwork.width, height: artwork.height },
             dpi: quality.dpi,
             qualityLabel: quality.label,
+            ...(size.round ? { round: true } : {}),
         };
     };
 

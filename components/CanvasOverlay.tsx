@@ -91,7 +91,7 @@ export default function CanvasOverlay({
                     <div
                         className="w-full h-full relative overflow-hidden"
                         style={{
-                            borderRadius: "2px",
+                            borderRadius: size.round ? "50%" : "2px",
                             boxShadow: [
                                 "0 0 0 1.5px rgba(255,255,255,0.18)",   // biała krawędź
                                 "3px 3px 0 0 rgba(0,0,0,0.55)",          // głębia blejtramu

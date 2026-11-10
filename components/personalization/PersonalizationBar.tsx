@@ -67,7 +67,7 @@ export default function PersonalizationBar({
             <img
                 src={artwork.previewUrl}
                 alt="Twoje zdjęcie"
-                className="rounded-[3px] object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+                className={`${size.round ? "rounded-full" : "rounded-[3px]"} object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.5)]`}
                 style={{
                     // Miniatura w proporcjach wybranego rozmiaru, z tym samym kadrem co na płótnie
                     width: size.widthCm >= size.heightCm ? 44 : (44 * size.widthCm) / size.heightCm,

@@ -6,6 +6,8 @@ export type CanvasSize = {
     heightCm: number;
     /** true, gdy produkt nie ma opcji rozmiaru i wymiary są tylko orientacyjne */
     approximate?: boolean;
+    /** true dla obrazu okrągłego (wariant „⌀40”): widthCm = heightCm = średnica */
+    round?: boolean;
 };
 
 export type Money = {
@@ -60,6 +62,8 @@ export type Personalization = {
     original: { width: number; height: number };
     dpi: number;
     qualityLabel: string;
+    /** Obraz okrągły — kadr to front koła */
+    round?: boolean;
 };
 
 /** Tryb podglądu, z którego klient dodał produkt do koszyka */

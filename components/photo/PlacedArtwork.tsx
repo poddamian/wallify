@@ -99,6 +99,9 @@ export default function PlacedArtwork({
                     touchAction: "none",
                     isolation: "isolate",
                     willChange: "transform",
+                    // Obraz okrągły: koło w układzie płótna, macierz zamienia je w elipsę perspektywy
+                    borderRadius: size.round ? "50%" : undefined,
+                    overflow: size.round ? "hidden" : undefined,
                     // Cień krosna: ok. 1,2 cm w dół, rozmycie ok. 3 cm (w jednostkach elementu)
                     boxShadow: `0 ${1.2 * BOX_PX_PER_CM}px ${3 * BOX_PX_PER_CM}px rgba(0,0,0,0.38),
                                 0 ${0.3 * BOX_PX_PER_CM}px ${0.6 * BOX_PX_PER_CM}px rgba(0,0,0,0.3)`,
