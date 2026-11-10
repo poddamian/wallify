@@ -5,6 +5,7 @@ import ARViewer from "@/components/ARViewer";
 import { createCart, addToCart } from "@/lib/shopify";
 import CheckoutReady from "@/components/personalization/CheckoutReady";
 import { addToShopCart } from "@/lib/cart-bridge";
+import { ROUND_WRAP_CM } from "@/lib/product";
 import { UploadError, uploadCustomerPhoto, type UploadedPhoto } from "@/lib/upload-client";
 import type { Personalization, Product, ProductVariant, ViewerMode } from "@/types";
 
@@ -49,6 +50,12 @@ function personalizationAttributes(p: Personalization, uploaded: UploadedPhoto):
             value: `x ${p.crop.x}, y ${p.crop.y}, ${p.crop.width} × ${p.crop.height} px (oryginał ${p.original.width} × ${p.original.height} px)`,
         },
         { key: "_Jakość druku", value: `${p.qualityLabel} (${p.dpi} DPI)` },
+        ...(p.round
+            ? [{
+                  key: "_Kształt",
+                  value: `okrągły — kadr to front koła, ok. ${ROUND_WRAP_CM} cm zdjęcia wokół kadru zawija się na boki krosna`,
+              }]
+            : []),
     ];
 }
 

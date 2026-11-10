@@ -41,7 +41,13 @@ const FALLBACK_SIZE: CanvasSize = {
  * Parsuje wartość rozmiaru wariantu (np. "70x50", "70x50 cm", "70 × 50 cm")
  * i zwraca { widthCm, heightCm } lub null, jeśli nie da się jej odczytać.
  */
-export function parseSize(value: string): { widthCm: number; heightCm: number } | null {
+export function parseSize(value: string): { widthCm: number; heightCm: number; round?: boolean } | null {
+    // Obraz okrągły: "⌀40", "Ø 60", "⌀80 cm" → średnica
+    const round = value.replace(/\s/g, "").match(/^[⌀Øø](\d+(?:[.,]\d+)?)/);
+    if (round) {
+        const d = Number(round[1].replace(",", "."));
+        return d ? { widthCm: d, heightCm: d, round: true } : null;
+    }
     const match = value.replace(/\s/g, "").match(/^(\d+(?:[.,]\d+)?)[xX×](\d+(?:[.,]\d+)?)/);
     if (!match) return null;
     const widthCm = Number(match[1].replace(",", "."));
@@ -50,8 +56,9 @@ export function parseSize(value: string): { widthCm: number; heightCm: number } 
     return { widthCm, heightCm };
 }
 
-function sizeLabel(widthCm: number, heightCm: number): string {
+function sizeLabel(widthCm: number, heightCm: number, round = false): string {
     const fmt = (n: number) => String(n).replace(".", ",");
+    if (round) return `⌀ ${fmt(widthCm)} cm`;
     return `${fmt(widthCm)} × ${fmt(heightCm)} cm`;
 }
 
@@ -74,13 +81,14 @@ export function buildProduct(raw: RawProduct): Product {
             const dims = SIZE_OPTION_NAME.test(name) ? parseSize(value) : null;
 
             if (dims && sizeId === null) {
-                sizeId = `${dims.widthCm}x${dims.heightCm}`;
+                sizeId = dims.round ? `o${dims.widthCm}` : `${dims.widthCm}x${dims.heightCm}`;
                 if (!sizes.some((s) => s.id === sizeId)) {
                     sizes.push({
                         id: sizeId,
-                        label: sizeLabel(dims.widthCm, dims.heightCm),
+                        label: sizeLabel(dims.widthCm, dims.heightCm, dims.round),
                         widthCm: dims.widthCm,
                         heightCm: dims.heightCm,
+                        ...(dims.round ? { round: true } : {}),
                     });
                 }
                 continue;
@@ -185,6 +193,9 @@ export const ORIENTATION_LABEL: Record<Orientation, string> = {
     portrait: "Pionowe",
     square: "Kwadratowe",
 };
+
+/** Szerokość pasa zdjęcia zawijanego na boki okrągłego krosna (cm) — informacja do zamówienia */
+export const ROUND_WRAP_CM = 3;
 
 /**
  * Rozmiary o proporcjach najbliższych zdjęciu (najmniej przycinania), maks. `max` sztuk,

@@ -217,13 +217,14 @@ export default function PhotoViewer({
                 h: current,
                 widthCm: size.widthCm,
                 heightCm: size.heightCm,
+                round: size.round,
                 light: light ?? NEUTRAL_LIGHT,
                 focus: artworkFocus,
                 caption: withCaption ? caption : undefined,
             });
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [photo, size.widthCm, size.heightCm, light, caption, imageUrl, artworkFocus]
+        [photo, size.widthCm, size.heightCm, size.round, light, caption, imageUrl, artworkFocus]
     );
 
     /** Gotowy JPG do zapisu — przygotowany zawczasu, żeby menu „Udostępnij" otworzyło się od razu */
